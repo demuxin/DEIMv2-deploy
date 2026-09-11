@@ -187,18 +187,31 @@ def reduce_dict(data, avg=True):
         return data
 
     with torch.no_grad():
-        keys, values = [], []
-        for k in sorted(data.keys()):
-            keys.append(k)
-            values.append(data[k])
+        # 各 rank 的 loss dict 键集合通常一致,此时走下方与原实现完全相同的 stack-allreduce 路径(数值逐位一致,不影响训练结果)。
+        # 仅当某个 rank 的 batch 无正样本匹配、criterion 省略部分损失项导致键缺失时,直接按各自键 stack 会让 NCCL all_reduce 因
+        # 向量长度不同而永久死锁(30 分钟 watchdog 超时);此时才对缺失键补0, 对齐后再 allreduce —— 该 rank 本步无对应损失,补 0 语义等价。
+        # 某张图在某 rank 某 epoch 经过 mosaic/裁剪后被增强管线切到一个有效目标都不剩,该 rank 的 loss dict 缺 32 个键 → 死锁
+        key_sets = all_gather(sorted(data.keys()))
+        keys = sorted(set().union(*[set(ks) for ks in key_sets]))
 
-        values = torch.stack(values, dim=0)
+        if all(ks == key_sets[0] for ks in key_sets):
+            # 各 rank 键集合一致:原实现路径,保留原始 dtype
+            values = torch.stack([data[k] for k in keys], dim=0)
+        else:
+            # 键缺失:按并集补 0 对齐，该 rank 本步该损失为 0
+            index = {k: i for i, k in enumerate(keys)}
+            sample = next(iter(data.values()), None)
+            device = sample.device if sample is not None else torch.device('cuda')
+            values = torch.zeros(len(keys), device=device, dtype=torch.float32)
+            for k, v in data.items():
+                values[index[k]] = v.detach().to(torch.float32)
+
         torch.distributed.all_reduce(values)
 
         if avg is True:
             values /= world_size
 
-        return {k: v for k, v in zip(keys, values)}
+        return {k: values[i] for i, k in enumerate(keys)}
 
 
 def all_gather(data):
