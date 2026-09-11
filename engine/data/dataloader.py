@@ -84,12 +84,43 @@ class BaseCollateFunction(object):
         raise NotImplementedError('')
 
 
-def generate_scales(base_size, base_size_repeat):
+def _single_scale_list(base_size, base_size_repeat):
+    """正方形/一维 base:0.75x~1.25x、步长 32 的采样列表(中心重复 base_size_repeat 次)。"""
     scale_repeat = (base_size - int(base_size * 0.75 / 32) * 32) // 32
     scales = [int(base_size * 0.75 / 32) * 32 + i * 32 for i in range(scale_repeat)]
     scales += [base_size] * base_size_repeat
     scales += [int(base_size * 1.25 / 32) * 32 - i * 32 for i in range(scale_repeat)]
     return scales
+
+
+def generate_scales(base_size, base_size_repeat, max_ratio_err=0.05):
+    """按 base_size 生成 0.75x~1.25x(步长 32)的多尺度采样列表。
+
+    base_size 支持 int 或 [h, w](如配置的 input_size):
+      - int / 正方形 [s, s]:返回一维 int 列表,整批随机取同一尺寸(原行为);
+      - 矩形 [h, w]:返回 (h, w) 对列表,整对随机;每对的长宽比与 base 的
+        相对偏差不超过 max_ratio_err(默认 5%),中心 (base_h, base_w)
+        重复 base_size_repeat 次,低/高端按步长 32 枚举并就近匹配另一方。
+    """
+    if isinstance(base_size, (list, tuple)):
+        base_h, base_w = int(base_size[0]), int(base_size[1])
+        if base_h == base_w:
+            return _single_scale_list(base_h, base_size_repeat)
+        cand_h = sorted(set(_single_scale_list(base_h, 1)))
+        cand_w = sorted(set(_single_scale_list(base_w, 1)))
+        center = (base_h, base_w)
+        # 低端固定只保留最接近基准的 3 档(base-96, base-64, base-32),高端不变
+        below = [h for h in cand_h if h < base_h][-3:]
+        high = [h for h in cand_h if h > base_h]
+        low, high_pairs = [], []
+        for h in below + high:
+            w_target = h * base_w / base_h          # 保持与 base 相同的长宽比
+            w = min(cand_w, key=lambda x: abs(x - w_target))
+            if abs(w - w_target) / w_target > max_ratio_err:
+                continue                            # 找不到近似的 w,丢弃该 h
+            (low if h < base_h else high_pairs).append((h, w))
+        return low + [center] * base_size_repeat + high_pairs
+    return _single_scale_list(int(base_size), base_size_repeat)
 
 
 @register() 

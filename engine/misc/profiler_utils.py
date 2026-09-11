@@ -11,7 +11,12 @@ def stats(
     input_shape: Tuple=(1, 3, 640, 640), ) -> Tuple[int, dict]:
 
     base_size = cfg.train_dataloader.collate_fn.base_size
-    input_shape = (1, 3, base_size, base_size)
+    # base_size 可能是 int(正方形)或 [h, w](矩形,跟随 input_size)
+    if isinstance(base_size, (list, tuple)):
+        h, w = int(base_size[0]), int(base_size[1])
+    else:
+        h = w = int(base_size)
+    input_shape = (1, 3, h, w)
 
     model_for_info = copy.deepcopy(cfg.model).deploy()
 
