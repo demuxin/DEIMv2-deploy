@@ -8,7 +8,7 @@ cd /workspace/DEIMv2
 #
 # 默认训练命令：
 # RESUME=/workspace/DEIMv2/outputs/deimv2_dinov3_x_charging_gun_nc4/last.pth \
-# NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=8 NUM_CLASSES=4 MODEL=x \
+# NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=8 MODEL=x \
 # OUTPUT_DIR=outputs/deimv2_dinov3_x_charging_gun_nc4 \
 # ./train_deimv2_dinov3.sh
 #
@@ -20,6 +20,8 @@ cd /workspace/DEIMv2
 #
 #   DATA_ROOT                             -> 数据集根目录(见下方)
 #   TRAIN_BATCH_SIZE / NPROC_PER_NODE     -> 需保持整除关系
+#   NUM_CLASSES                           -> 无需设置:自动从 TRAIN_ANN 的 categories
+#                                            读取(= max(category_id)+1,要求 id 从 0 连续)
 #   EPOCHS                                -> 留空(默认)用 yml 各配置自带的 epoches
 #                                            (x=58、l=68、m=102、s=132,调度窗口与之一致);
 #                                            仅需临时覆盖时再显式设置,如 EPOCHS=80。
@@ -39,7 +41,6 @@ cd /workspace/DEIMv2
 MODEL="${MODEL:-x}"                         # s / m / l / x
 DEVICE="${DEVICE:-cuda}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
-NUM_CLASSES="${NUM_CLASSES:-7}"
 TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-8}"   # 所有 rank 的总 batch
 VAL_BATCH_SIZE="${TRAIN_BATCH_SIZE:-8}"     # 所有 rank 的总 batch
 NUM_WORKERS="${NUM_WORKERS:-4}"
@@ -55,7 +56,7 @@ EMA_WARMUPS="${EMA_WARMUPS:-}"
 # 为空则从头开始。注意:续训需保持数据/参数与上次一致。
 RESUME="${RESUME:-}"
 
-DATA_ROOT="${DATA_ROOT:-/workspace/dataset/充电枪落地/coco20260910_nc7}"
+DATA_ROOT="${DATA_ROOT:-/workspace/dataset/充电枪落地/coco20260910_nc4}"
 TRAIN_IMAGES="${TRAIN_IMAGES:-${DATA_ROOT}/train2017}"
 TRAIN_ANN="${TRAIN_ANN:-${DATA_ROOT}/annotations/train_annotation.json}"
 VAL_IMAGES="${VAL_IMAGES:-${DATA_ROOT}/val2017}"
@@ -94,13 +95,30 @@ if [[ "${USE_EMA}" != "0" && "${USE_EMA}" != "1" ]]; then
     exit 1
 fi
 
-# 读取 yml 合并配置自带的 epoches 与 collate 的 stop_epoch(x=50、l=60、m=90、s=120)
-read -r CFG_EPOCHS CFG_STOP < <(python3 - "${CONFIG}" <<'PY'
+# 读取:yml 自带的 epoches 与 collate 的 stop_epoch(x=50、l=60、m=90、s=120)、
+#       训练图数、类别数(自动从 TRAIN_ANN 的 categories 读取 = max(id)+1)
+read -r CFG_EPOCHS CFG_STOP N_TRAIN N_CLASSES < <(python3 - "${CONFIG}" "${TRAIN_ANN}" <<'PY'
+import json
 import sys
 from engine.core import YAMLConfig
+
 y = YAMLConfig(sys.argv[1]).yaml_cfg
+cfg_epochs = y.get("epoches", 0)
+cfg_stop = y.get("train_dataloader", {}).get("collate_fn", {}).get("stop_epoch", 0)
+
+data = json.load(open(sys.argv[2]))
+n_train = len(data["images"])
+cats = data.get("categories")
+if not cats:
+    raise RuntimeError(f"标注文件缺少 categories 字段: {sys.argv[2]}")
+ids = sorted(int(c["id"]) for c in cats)
+n_classes = ids[-1] + 1
+if ids != list(range(n_classes)):
+    print(f"[warn] 类别 id 不连续(需从 0 连续): ids={ids};num_classes 将取 max(id)+1={n_classes}",
+          file=sys.stderr)
+
 # 必须单行输出(read 只消费第一行)
-print(y.get("epoches", 0), y.get("train_dataloader", {}).get("collate_fn", {}).get("stop_epoch", 0))
+print(cfg_epochs, cfg_stop, n_train, n_classes)
 PY
 )
 # 有效训练轮数:显式 EPOCHS 优先,否则用 yml 自带值
@@ -114,7 +132,6 @@ fi
 # ----------------------------------------------------------------------------
 # 按真实数据集规模推导按迭代数计的调度参数
 # ----------------------------------------------------------------------------
-N_TRAIN=$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["images"]))' "${TRAIN_ANN}")
 ITERS_PER_EPOCH=$(( (N_TRAIN + TRAIN_BATCH_SIZE - 1) / TRAIN_BATCH_SIZE ))   # 向上取整
 TOTAL_ITERS=$(( ITERS_PER_EPOCH * EPOCHS_EFF ))
 if [[ -z "${WARMUP_ITER}" ]]; then
@@ -126,7 +143,7 @@ if [[ -z "${EMA_WARMUPS}" ]]; then
 fi
 
 echo "--------------------------------------------------------------"
-echo "[data]   train images: ${N_TRAIN} -> ${ITERS_PER_EPOCH} iters/epoch (total_batch=${TRAIN_BATCH_SIZE})"
+echo "[data]   train images: ${N_TRAIN} -> ${ITERS_PER_EPOCH} iters/epoch (total_batch=${TRAIN_BATCH_SIZE}) | num_classes=${N_CLASSES} (auto from annotations)"
 echo "[sched]  epoches=${EPOCHS_EFF} (yml=${CFG_EPOCHS}${EPOCHS:+ / EPOCHS env override}) stop_epoch=${CFG_STOP} total_iters=${TOTAL_ITERS} warmup_iter=${WARMUP_ITER} (quadratic warmup ends at epoch $((WARMUP_ITER / ITERS_PER_EPOCH + 1)))"
 echo "[ema]    use_ema=${USE_EMA} ema_warmups=${EMA_WARMUPS}"
 if [[ -d "${OUTPUT_DIR}" ]] && [[ -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
@@ -181,7 +198,7 @@ else
 fi
 
 UPDATES=(
-    "num_classes=${NUM_CLASSES}"
+    "num_classes=${N_CLASSES}"
     "remap_mscoco_category=False"
     "DINOv3STAs.weights_path=${BACKBONE_WEIGHTS}"
     "train_dataloader.dataset.img_folder=${TRAIN_IMAGES}"
