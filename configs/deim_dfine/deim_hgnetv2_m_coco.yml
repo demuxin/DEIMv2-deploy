@@ -3,22 +3,34 @@ __include__: [
   '../base/deim.yml'
 ]
 
+# ====== 模型输入尺寸 ======
+# 格式 [h, w],改 input_size 即可同步:训练 Resize、验证 Resize、eval_spatial_size、
+# collate 多尺度(base_size = input_size;正方形整批同尺寸,矩形按 (h,w) 对随机
+# 且长宽比偏差 <=5%,低端固定 3 档,范围约 0.75x~1.25x、步长 32)。
+# 要求:h、w 均为 32 的整数倍(输出网格按 尺寸/32 对齐)。
+input_size: &input_size [576, 1024]
+
+# Mosaic 拼图中间尺寸 ≈ h 的一半(改 input_size 时按 h/2 手动同步)
+mosaic_out_size: &mosaic_out_size 288
+
+# eval/测试固定尺寸:解码器按它缓存 anchor、编码器按它缓存位置编码, 必须与实际输入一致
+eval_spatial_size: *input_size
+
 output_dir: ./outputs/deim_hgnetv2_m_coco
 
 optimizer:
   type: AdamW
-  params: 
+  params:
     -
       params: '^(?=.*backbone)(?!.*bn).*$'
       lr: 0.00004
-    - 
+    -
       params: '^(?=.*(?:norm|bn)).*$'
       weight_decay: 0.
 
   lr: 0.0004
   betas: [0.9, 0.999]
   weight_decay: 0.0001
-
 
 # Increase to search for the optimal ema
 epoches: 102 # 120 + 4n
@@ -28,12 +40,35 @@ flat_epoch: 49    # 4 + epoch // 2, e.g., 40 = 4 + 72 / 2
 no_aug_epoch: 12
 
 ## Our DataAug
-train_dataloader: 
-  dataset: 
+train_dataloader:
+  dataset:
     transforms:
+      ops:
+        - {type: Mosaic, output_size: *mosaic_out_size, rotation_range: 10, translation_range: [0.1, 0.1], scaling_range: [0.5, 1.5],
+           probability: 1.0, fill_value: 0, use_cache: True, max_cached_images: 50, random_pop: True}
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: *input_size, }
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
       policy:
-        epoch: [4, 49, 90]   # list 
+        epoch: [4, 49, 90]   # list
 
   collate_fn:
+    base_size: *input_size    # 多尺度中心,自动跟随 input_size(正方形/矩形均可)
     mixup_epochs: [4, 49]
     stop_epoch: 90
+    base_size_repeat: 3
+
+val_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: *input_size, }
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+
+checkpoint_freq: 50    # save freq
