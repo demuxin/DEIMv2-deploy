@@ -21,9 +21,16 @@ __all__ = [
 INCLUDE_KEY = '__include__'
 
 
-def load_config(file_path, cfg=dict()):
+def load_config(file_path, cfg=None):
     """load config
+
+    注意:不能用 `cfg=dict()` 做默认值——可变默认参数会在同一进程内
+    跨多次 load_config 调用累积,导致后加载的配置"继承"前一个配置里
+    它未定义的键(典型的隐性污染,难排查)。
     """
+    if cfg is None:
+        cfg = {}
+
     _, ext = os.path.splitext(file_path)
     assert ext in ['.yml', '.yaml'], "only support yaml files"
 
