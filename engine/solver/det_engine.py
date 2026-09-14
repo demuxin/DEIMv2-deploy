@@ -109,6 +109,15 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
         metric_logger.update(loss=loss_value, **loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
+        # 显存诊断:与统计行同频(print_freq),主进程打印
+        # 记录 当前 batch 的多尺度尺寸 + allocated(真实占用)/reserved(含缓存)
+        if torch.cuda.is_available() and i % print_freq == 0:
+            h, w = samples.shape[-2:]
+            alloc_mib = torch.cuda.memory_allocated() / 1024 ** 2
+            reserved_mib = torch.cuda.memory_reserved() / 1024 ** 2
+            print(f"  [mem] step {global_step} scale {h}x{w} "
+                  f"allocated {alloc_mib:.0f}MiB reserved {reserved_mib:.0f}MiB")
+
         if writer and dist_utils.is_main_process() and global_step % 10 == 0:
             writer.add_scalar('Loss/total', loss_value.item(), global_step)
             for j, pg in enumerate(optimizer.param_groups):

@@ -84,33 +84,37 @@ class BaseCollateFunction(object):
         raise NotImplementedError('')
 
 
-def _single_scale_list(base_size, base_size_repeat):
-    """正方形/一维 base:0.75x~1.25x、步长 32 的采样列表(中心重复 base_size_repeat 次)。"""
-    scale_repeat = (base_size - int(base_size * 0.75 / 32) * 32) // 32
-    scales = [int(base_size * 0.75 / 32) * 32 + i * 32 for i in range(scale_repeat)]
+def _single_scale_list(base_size, base_size_repeat, scale_range=(0.85, 1.25)):
+    """正方形/一维 base:scale_range 区间内、步长 32 的采样列表(中心重复 base_size_repeat 次)。
+    边界按 32 对齐向下取整,个别 base 的上界会略低于 hi(最多差 31px)。
+    """
+    lo, hi = float(scale_range[0]), float(scale_range[1])
+    scale_repeat = (base_size - int(base_size * lo / 32) * 32) // 32
+    scales = [int(base_size * lo / 32) * 32 + i * 32 for i in range(scale_repeat)]
     scales += [base_size] * base_size_repeat
-    scales += [int(base_size * 1.25 / 32) * 32 - i * 32 for i in range(scale_repeat)]
+    scales += [int(base_size * hi / 32) * 32 - i * 32 for i in range(scale_repeat)]
     return scales
 
 
-def generate_scales(base_size, base_size_repeat, max_ratio_err=0.05):
-    """按 base_size 生成 0.75x~1.25x(步长 32)的多尺度采样列表。
+def generate_scales(base_size, base_size_repeat, max_ratio_err=0.05, scale_range=(0.85, 1.25)):
+    """按 base_size 生成 scale_range 区间(默认 0.85x~1.25x、步长 32)的多尺度采样列表。
 
     base_size 支持 int 或 [h, w](如配置的 input_size):
       - int / 正方形 [s, s]:返回一维 int 列表,整批随机取同一尺寸(原行为);
       - 矩形 [h, w]:返回 (h, w) 对列表,整对随机;每对的长宽比与 base 的
         相对偏差不超过 max_ratio_err(默认 5%),中心 (base_h, base_w)
         重复 base_size_repeat 次,低/高端按步长 32 枚举并就近匹配另一方。
+    scale_range:(lo, hi) 自定义缩放区间,由 collate 的 scale_range 配置项传入。
     """
     if isinstance(base_size, (list, tuple)):
         base_h, base_w = int(base_size[0]), int(base_size[1])
         if base_h == base_w:
-            return _single_scale_list(base_h, base_size_repeat)
-        cand_h = sorted(set(_single_scale_list(base_h, 1)))
-        cand_w = sorted(set(_single_scale_list(base_w, 1)))
+            return _single_scale_list(base_h, base_size_repeat, scale_range)
+        cand_h = sorted(set(_single_scale_list(base_h, 1, scale_range)))
+        cand_w = sorted(set(_single_scale_list(base_w, 1, scale_range)))
         center = (base_h, base_w)
-        # 低端固定只保留最接近基准的 3 档(base-96, base-64, base-32),高端不变
-        below = [h for h in cand_h if h < base_h][-3:]
+        # 低/高端均使用枚举出的全部档位
+        below = [h for h in cand_h if h < base_h]
         high = [h for h in cand_h if h > base_h]
         low, high_pairs = [], []
         for h in below + high:
@@ -120,7 +124,7 @@ def generate_scales(base_size, base_size_repeat, max_ratio_err=0.05):
                 continue                            # 找不到近似的 w,丢弃该 h
             (low if h < base_h else high_pairs).append((h, w))
         return low + [center] * base_size_repeat + high_pairs
-    return _single_scale_list(int(base_size), base_size_repeat)
+    return _single_scale_list(int(base_size), base_size_repeat, scale_range)
 
 
 @register() 
@@ -131,6 +135,7 @@ class BatchImageCollateFunction(BaseCollateFunction):
         ema_restart_decay=0.9999,
         base_size=640,
         base_size_repeat=None,
+        scale_range=(0.85, 1.25),
         mixup_prob=0.0,
         mixup_epochs=[0, 0],
         copyblend_prob=0.0,
@@ -147,7 +152,12 @@ class BatchImageCollateFunction(BaseCollateFunction):
     ) -> None:
         super().__init__()
         self.base_size = base_size
-        self.scales = generate_scales(base_size, base_size_repeat) if base_size_repeat is not None else None
+        # scale_range=null → 关闭多尺度(始终按 base_size 训练); 否则与 base_size_repeat 一起决定采样列表
+        self.scale_range = (tuple(scale_range)
+                            if isinstance(scale_range, (list, tuple)) and len(scale_range) == 2
+                            else None)
+        self.scales = (generate_scales(base_size, base_size_repeat, scale_range=self.scale_range)
+                       if (base_size_repeat is not None and self.scale_range is not None) else None)
         self.stop_epoch = stop_epoch if stop_epoch is not None else 100000000
         self.ema_restart_decay = ema_restart_decay
         self.mixup_prob, self.mixup_epochs = mixup_prob, mixup_epochs
@@ -176,7 +186,10 @@ class BatchImageCollateFunction(BaseCollateFunction):
 
         if stop_epoch is not None:
             print("     ### Multi-scale Training until {} epochs ### ".format(self.stop_epoch))
-            print("     ### Multi-scales@ {} ###        ".format(self.scales))
+            if self.scales is not None:
+                print("     ### Multi-scales@ {} ###        ".format(self.scales))
+            else:
+                print("     ### Multi-scale DISABLED (scale_range=null) ###")
         self.print_info_flag = True
         self.print_copyblend_flag = True
         # self.interpolation = interpolation

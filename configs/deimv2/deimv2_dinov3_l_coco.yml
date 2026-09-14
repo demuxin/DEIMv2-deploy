@@ -9,7 +9,7 @@ __include__: [
 # ====== 模型输入尺寸 ======
 # 格式 [h, w],改 input_size 即可同步:训练 Resize、验证 Resize、eval_spatial_size、
 # collate 多尺度(base_size = input_size;正方形整批同尺寸,矩形按 (h,w) 对随机
-# 且长宽比偏差 <=5%,低端固定 3 档,范围约 0.75x~1.25x、步长 32)。
+# 且长宽比偏差 <=5%;缩放范围由 collate 的 scale_range 控制(默认 0.85x~1.25x、步长 32,null=关闭)。
 # 要求:h、w 均为 32 的整数倍(输出网格按 尺寸/32 对齐)。
 input_size: &input_size [576, 1024]
 
@@ -98,6 +98,7 @@ train_dataloader:
 
   collate_fn:
     base_size: *input_size    # 多尺度中心,自动跟随 input_size(正方形/矩形均可)
+    scale_range: [0.85, 1.25]    # 多尺度范围;null=关闭(固定按 base_size 训练)
     mixup_epochs: [4, 34]
     stop_epoch: 60
     copyblend_epochs: [4, 60]
