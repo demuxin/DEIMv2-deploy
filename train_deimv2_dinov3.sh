@@ -9,7 +9,7 @@ cd /workspace/DEIMv2
 # 默认训练命令：
 # RESUME=/workspace/DEIMv2/outputs/deimv2_dinov3_x_charging_gun_nc4/last.pth \
 # NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=8 MODEL=x \
-# OUTPUT_DIR=outputs/deimv2_dinov3_x_charging_gun_nc4 \
+# OUTPUT_DIR=outputs/deimv2_dinov3_x_charging_gun_nc4_3 \
 # ./train_deimv2_dinov3.sh
 #
 # 脚本从标注 json 自动读出训练图数,算出 iters_per_epoch,按比例自动生成 warmup_iter/ema.warmups,
@@ -31,9 +31,10 @@ cd /workspace/DEIMv2
 #                                            公式:stop=N-no_aug;其余按 yml值×N/yml_epoches 四舍五入
 #   USE_EMA=1(默认)                        -> 完整两段式训练(stage1 带增强 ->
 #                                            stage2 去增强 + EMA 刷新,输出 best_stg2.pth)
-#   USE_EMA=0                             -> 只跑 stage1;此时训练 epoches 必须 <= 各配置的
-#                                            stop_epoch(x=50、l=60、m=90、s=120),否则 det_solver
-#                                            在 epoch==stop_epoch 会访问 self.ema 崩溃
+#   USE_EMA=0                             -> 只跑 stage1:脚本自动把 stop_epoch 联动为
+#                                            epoches+1(stage2/EMA 刷新永不触发,增强全程保留)
+#   VAL_BATCH_SIZE                        -> 验证集总 batch(默认与 TRAIN_BATCH_SIZE 相同)
+#   MASTER_PORT                           -> torchrun 端口(默认 29500;并发跑多个实验时分别指定)
 #
 # 所有按迭代数(iteration)计的调度参数都会根据训练标注文件自动推导,
 # 比例与 base 配置里的 COCO 参数一致:
@@ -46,8 +47,9 @@ MODEL="${MODEL:-x}"                         # s / m / l / x
 DEVICE="${DEVICE:-cuda}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-8}"   # 所有 rank 的总 batch
-VAL_BATCH_SIZE="${TRAIN_BATCH_SIZE:-8}"     # 所有 rank 的总 batch
-NUM_WORKERS="${NUM_WORKERS:-4}"
+VAL_BATCH_SIZE="${VAL_BATCH_SIZE:-${TRAIN_BATCH_SIZE:-8}}"   # 所有 rank 的总 batch
+NUM_WORKERS="${NUM_WORKERS:-6}"
+MASTER_PORT="${MASTER_PORT:-}"              # torchrun 端口(留空用默认 29500)
 # 留空则使用 yml 配置自带的 epoches(x=58、l=68、m=102、s=132);显式设置时覆盖
 EPOCHS="${EPOCHS:-}"
 USE_EMA="${USE_EMA:-1}"
@@ -83,6 +85,11 @@ for path in "${CONFIG}" "${PRETRAIN}" "${TRAIN_IMAGES}" "${TRAIN_ANN}" "${VAL_IM
     fi
 done
 
+if [[ -n "${RESUME}" && ! -e "${RESUME}" ]]; then
+    echo "Missing RESUME: ${RESUME}" >&2
+    exit 1
+fi
+
 # ----------------------------------------------------------------------------
 # 前置防呆检查
 # ----------------------------------------------------------------------------
@@ -99,12 +106,21 @@ if [[ "${USE_EMA}" != "0" && "${USE_EMA}" != "1" ]]; then
     exit 1
 fi
 
-# 读取:yml 自带的 epoches 与 collate 的 stop_epoch(x=50、l=60、m=90、s=120)、
-#       训练图数、类别数(自动从 TRAIN_ANN 的 categories 读取 = max(id)+1)
-read -r CFG_EPOCHS CFG_STOP N_TRAIN N_CLASSES CFG_NOAUG CFG_FLAT CFG_CB CFG_MATCH < <(python3 - "${CONFIG}" "${TRAIN_ANN}" <<'PY'
+# 读取:yml 自带的 epoches/stop_epoch(x=50、l=60、m=90、s=120)/no_aug/flat(及可选的
+#       copyblend/matcher 窗口)、训练图数、类别数(自动从 TRAIN_ANN 读取)、
+#       以及 RESUME ckpt 的类别数(用于一致性校验)
+if ! read -r CFG_EPOCHS CFG_STOP N_TRAIN N_CLASSES CFG_NOAUG CFG_FLAT CFG_CB CFG_MATCH RESUME_NC \
+    < <(python3 - "${CONFIG}" "${TRAIN_ANN}" "${RESUME}" <<'PY'
 import json
+import os
+import re
 import sys
+import warnings
+
+import torch
 from engine.core import YAMLConfig
+
+warnings.filterwarnings("ignore")
 
 y = YAMLConfig(sys.argv[1]).yaml_cfg
 cfg_epochs = y.get("epoches", 0)
@@ -128,24 +144,75 @@ if ids != list(range(n_classes)):
     print(f"[warn] 类别 id 不连续(需从 0 连续): ids={ids};num_classes 将取 max(id)+1={n_classes}",
           file=sys.stderr)
 
+# RESUME ckpt 的类别数(取 decoder 分类头行数)
+resume_path = sys.argv[3]
+resume_nc = -1
+if resume_path:
+    if not os.path.exists(resume_path):
+        print(f"[error] RESUME 不存在: {resume_path}", file=sys.stderr)
+        sys.exit(1)
+    ck = torch.load(resume_path, map_location="cpu")
+    if isinstance(ck, dict) and isinstance(ck.get("ema"), dict):
+        st = ck["ema"].get("module", ck["ema"])
+    elif isinstance(ck, dict) and "model" in ck:
+        st = ck["model"]
+    else:
+        st = ck
+    for k, v in st.items():
+        k2 = k[len("module."):] if k.startswith("module.") else k
+        if re.search(r"decoder\.dec_score_head\.\d+\.weight$", k2) and getattr(v, "dim", lambda: 0)() == 2:
+            resume_nc = int(v.shape[0])
+            break
+
 # 必须单行输出(read 只消费第一行)
-print(cfg_epochs, cfg_stop, n_train, n_classes, cfg_noaug, cfg_flat, cfg_cb, cfg_match)
+print(cfg_epochs, cfg_stop, n_train, n_classes, cfg_noaug, cfg_flat, cfg_cb, cfg_match, resume_nc)
 PY
-)
+); then
+    echo "解析配置/标注失败:请检查上方 python 报错(常见原因:标注文件损坏/缺 categories、RESUME 不可读)" >&2
+    exit 1
+fi
+
+# 解析结果校验:非空且为数字(python 段异常时明确报错,而不是后续算术炸出难懂信息)
+for kv in "CFG_EPOCHS=${CFG_EPOCHS}" "CFG_STOP=${CFG_STOP}" "N_TRAIN=${N_TRAIN}" \
+          "N_CLASSES=${N_CLASSES}" "CFG_NOAUG=${CFG_NOAUG}" "CFG_FLAT=${CFG_FLAT}"; do
+    if ! [[ "${kv#*=}" =~ ^[0-9]+$ ]]; then
+        echo "解析配置/标注失败(${kv%%=*}=${kv#*=}),请检查上方 python 报错" >&2
+        exit 1
+    fi
+done
+if ! [[ "${CFG_CB}" =~ ^-?[0-9]+$ && "${CFG_MATCH}" =~ ^-?[0-9]+$ && "${RESUME_NC}" =~ ^-?[0-9]+$ ]]; then
+    echo "解析失败(CFG_CB=${CFG_CB} CFG_MATCH=${CFG_MATCH} RESUME_NC=${RESUME_NC})" >&2
+    exit 1
+fi
+
+# 续训 ckpt 与数据类别数一致性(不一致时 strict 加载会崩,这里提前拦截)
+if (( RESUME_NC >= 0 )) && (( RESUME_NC != N_CLASSES )); then
+    echo "续训 ckpt 类别数(${RESUME_NC})与标注类别数(${N_CLASSES})不一致" >&2
+    echo "-> RESUME=${RESUME};检查它是否与 DATA_ROOT/TRAIN_ANN 配对" >&2
+    exit 1
+fi
+
 # 有效训练轮数:显式 EPOCHS 优先,否则用 yml 自带值
 EPOCHS_EFF="${EPOCHS:-${CFG_EPOCHS}}"
+if (( EPOCHS_EFF <= 0 )); then
+    echo "epoches 未定义:请设置 EPOCHS 或检查 ${CONFIG}" >&2
+    exit 1
+fi
 
-# ---- EPOCHS 单变量联动:显式设置 EPOCHS 时,按 yml 设计等比推导各 epoch 尺度窗口 ----
-LINK=0
+# ---- EPOCHS 单变量联动 + USE_EMA=0 纯 stage1 处理 ----
+LINK=0; EMA_OFF=0
 STOP_EFF="${CFG_STOP}"
 FLAT_EFF="${CFG_FLAT}"
 POLICY_EPOCH=""; MIXUP_EPOCH=""; CB_EPOCH=""; MATCH_EPOCH=""
 # 把 yml 值按 N/yml_epoches 等比放大,四舍五入
 scale_epoch() { echo $(( ($1 * EPOCHS_EFF + CFG_EPOCHS / 2) / CFG_EPOCHS )); }
+if [[ "${USE_EMA}" == "0" ]]; then
+    EMA_OFF=1
+fi
 if [[ -n "${EPOCHS}" ]]; then
     LINK=1
     NOAUG_EFF="${CFG_NOAUG}"; (( NOAUG_EFF > 0 )) || NOAUG_EFF=8
-    if (( EPOCHS_EFF - NOAUG_EFF <= 4 )); then
+    if (( ! EMA_OFF )) && (( EPOCHS_EFF - NOAUG_EFF <= 4 )); then
         echo "EPOCHS=${EPOCHS_EFF} 太小(需 > no_aug_epoch(${NOAUG_EFF}) + 4)" >&2
         exit 1
     fi
@@ -154,24 +221,27 @@ if [[ -n "${EPOCHS}" ]]; then
         FLAT_EFF=$(scale_epoch "${CFG_FLAT}")
     fi
     (( FLAT_EFF > 4 )) || FLAT_EFF=$(( EPOCHS_EFF / 2 ))    # 保护:至少大于 warmup 起点 4
+fi
+if (( EMA_OFF )); then
+    # 纯 stage1:stop_epoch 设为 epoches+1,det_solver 的 epoch==stop_epoch 永不命中,
+    # stage2/EMA 刷新不触发,增强(含尾段策略)全程保留
+    STOP_EFF=$(( EPOCHS_EFF + 1 ))
+fi
+if [[ "${LINK}" == "1" || "${EMA_OFF}" == "1" ]]; then
     POLICY_EPOCH="[4, ${FLAT_EFF}, ${STOP_EFF}]"
-    MIXUP_EPOCH="[4, ${FLAT_EFF}]"
     if (( CFG_CB >= 0 )); then
         CB_EPOCH="[4, ${STOP_EFF}]"
     fi
-    if (( CFG_MATCH >= 0 )); then
+    if (( CFG_MATCH >= 0 && LINK )); then
         if (( CFG_EPOCHS > 0 )); then
             MATCH_EPOCH=$(scale_epoch "${CFG_MATCH}")
         else
             MATCH_EPOCH=$(( (77 * EPOCHS_EFF + 50) / 100 ))
         fi
     fi
-fi
-
-if [[ "${USE_EMA}" == "0" ]] && (( EPOCHS_EFF > STOP_EFF )); then
-    echo "USE_EMA=0 runs stage-1 only: epoches=${EPOCHS_EFF} exceeds stop_epoch=${STOP_EFF} of ${CONFIG}" >&2
-    echo "-> 用 USE_EMA=1(完整两段式),或把 epoches 压到 stop_epoch 以内" >&2
-    exit 1
+    if (( LINK )); then
+        MIXUP_EPOCH="[4, ${FLAT_EFF}]"
+    fi
 fi
 
 # ----------------------------------------------------------------------------
@@ -191,6 +261,9 @@ echo "--------------------------------------------------------------"
 echo "[data]   train images: ${N_TRAIN} -> ${ITERS_PER_EPOCH} iters/epoch (total_batch=${TRAIN_BATCH_SIZE}) | num_classes=${N_CLASSES} (auto from annotations)"
 echo "[sched]  epoches=${EPOCHS_EFF} (yml=${CFG_EPOCHS}${EPOCHS:+ / EPOCHS env override}) stop_epoch=${STOP_EFF} total_iters=${TOTAL_ITERS} warmup_iter=${WARMUP_ITER} (quadratic warmup ends at epoch $((WARMUP_ITER / ITERS_PER_EPOCH + 1)))"
 echo "[ema]    use_ema=${USE_EMA} ema_warmups=${EMA_WARMUPS}"
+if [[ "${EMA_OFF}" == "1" ]]; then
+    echo "[stage]  USE_EMA=0 纯 stage1: stop_epoch 联动为 epoches+1(${STOP_EFF}),stage2/EMA 刷新不触发,增强全程保留"
+fi
 if [[ "${LINK}" == "1" ]]; then
     echo "[link]   EPOCHS=${EPOCHS} 联动: stop_epoch=${STOP_EFF} flat_epoch=${FLAT_EFF} policy=${POLICY_EPOCH} mixup=${MIXUP_EPOCH}${CB_EPOCH:+ copyblend=${CB_EPOCH}}${MATCH_EPOCH:+ matcher_change=${MATCH_EPOCH}}"
 fi
@@ -263,14 +336,18 @@ UPDATES=(
 if [[ -n "${EPOCHS}" ]]; then
     UPDATES=("epoches=${EPOCHS}" "${UPDATES[@]}")
 fi
-# EPOCHS 联动:注入等比推导出的各 epoch 尺度窗口(仅显式设置 EPOCHS 时)
-if [[ "${LINK}" == "1" ]]; then
+# EPOCHS 联动 / USE_EMA=0 纯 stage1:注入推导出的 epoch 尺度窗口
+if [[ "${LINK}" == "1" || "${EMA_OFF}" == "1" ]]; then
     UPDATES+=(
         "train_dataloader.collate_fn.stop_epoch=${STOP_EFF}"
-        "flat_epoch=${FLAT_EFF}"
         "train_dataloader.dataset.transforms.policy.epoch=${POLICY_EPOCH}"
-        "train_dataloader.collate_fn.mixup_epochs=${MIXUP_EPOCH}"
     )
+    if [[ "${LINK}" == "1" ]]; then
+        UPDATES+=(
+            "flat_epoch=${FLAT_EFF}"
+            "train_dataloader.collate_fn.mixup_epochs=${MIXUP_EPOCH}"
+        )
+    fi
     if [[ -n "${CB_EPOCH}" ]]; then
         UPDATES+=("train_dataloader.collate_fn.copyblend_epochs=${CB_EPOCH}")
     fi
@@ -297,12 +374,21 @@ fi
 # (用于参数/联动校验,避免误拉起训练)
 if [[ "${PRINT_ONLY:-0}" == "1" ]]; then
     echo "[dry] 仅打印,不启动训练。最终命令:"
+    if [[ "${NPROC_PER_NODE}" -gt 1 ]]; then
+        echo "[dry] torchrun --nproc_per_node=${NPROC_PER_NODE}${MASTER_PORT:+ --master_port=${MASTER_PORT}} train.py <ARGS>"
+    else
+        echo "[dry] python3 train.py <ARGS>"
+    fi
     printf ' %q' "${ARGS[@]}"; echo
     exit 0
 fi
 
 if [[ "${NPROC_PER_NODE}" -gt 1 ]]; then
-    torchrun --nproc_per_node="${NPROC_PER_NODE}" train.py "${ARGS[@]}"
+    PORT_ARGS=()
+    if [[ -n "${MASTER_PORT}" ]]; then
+        PORT_ARGS=(--master_port="${MASTER_PORT}")
+    fi
+    torchrun --nproc_per_node="${NPROC_PER_NODE}" "${PORT_ARGS[@]}" train.py "${ARGS[@]}"
 else
     python3 train.py "${ARGS[@]}"
 fi
