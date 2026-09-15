@@ -28,7 +28,10 @@ cd /workspace/DEIMv2
 #                                            以 yml 设计为基准等比推导并注入
 #                                              stop_epoch / flat_epoch / policy.epoch / mixup_epochs /
 #                                              copyblend_epochs / matcher_change_epoch
-#                                            公式:stop=N-no_aug;其余按 yml值×N/yml_epoches 四舍五入
+#                                            公式(以有效训练段 T=N-no_aug 为基准):
+#                                              stop=T;flat=4+T//2;policy=[4,flat,T];
+#                                              mixup=[4,flat];copyblend 终点=T;
+#                                              matcher=yml_match×T/yml_stop(保留各模型原比例)
 #   USE_EMA=1(默认)                        -> 完整两段式训练(stage1 带增强 ->
 #                                            stage2 去增强 + EMA 刷新,输出 best_stg2.pth)
 #   USE_EMA=0                             -> 只跑 stage1:脚本自动把 stop_epoch 联动为
@@ -127,11 +130,18 @@ cfg_epochs = y.get("epoches", 0)
 cc = y.get("train_dataloader", {}).get("collate_fn", {})
 crit = y.get("DEIMCriterion", {}).get("matcher", {})
 cfg_stop = cc.get("stop_epoch", 0)
-cfg_noaug = y.get("no_aug_epoch", 8) or 8
-cfg_flat = y.get("flat_epoch", 0) or max(1, cfg_epochs // 2)
+cfg_noaug = y.get("no_aug_epoch")
+if cfg_noaug is None:                       # 仅在缺失/None 时 fallback,
+    cfg_noaug = 8                           # 显式写的 no_aug_epoch: 0 予以保留
+cfg_flat = y.get("flat_epoch")
+if cfg_flat is None:
+    cfg_flat = max(1, cfg_epochs // 2)
 cb = cc.get("copyblend_epochs")
 cfg_cb = int(cb[-1]) if isinstance(cb, (list, tuple)) and len(cb) else -1      # -1 = 未启用
-cfg_match = int(crit.get("matcher_change_epoch") or -1) if crit.get("change_matcher") else -1
+cfg_match = -1
+if crit.get("change_matcher"):
+    v = crit.get("matcher_change_epoch")        # 仅在缺失/None 时视为未启用,
+    cfg_match = -1 if v is None else int(v)     # 显式写的 0 予以保留
 
 data = json.load(open(sys.argv[2]))
 n_train = len(data["images"])
@@ -200,27 +210,30 @@ if (( EPOCHS_EFF <= 0 )); then
 fi
 
 # ---- EPOCHS 单变量联动 + USE_EMA=0 纯 stage1 处理 ----
+# 官方以"有效训练段" T = epoches - no_aug_epoch 为基准定义中后段策略:
+#   stop_epoch = T;flat_epoch = 4 + T//2;policy = [4, flat, T];mixup = [4, flat];
+#   copyblend 终点 = T;matcher_change = 各模型原比例(CFG_MATCH/CFG_STOP) × T
 LINK=0; EMA_OFF=0
 STOP_EFF="${CFG_STOP}"
 FLAT_EFF="${CFG_FLAT}"
 POLICY_EPOCH=""; MIXUP_EPOCH=""; CB_EPOCH=""; MATCH_EPOCH=""
-# 把 yml 值按 N/yml_epoches 等比放大,四舍五入
-scale_epoch() { echo $(( ($1 * EPOCHS_EFF + CFG_EPOCHS / 2) / CFG_EPOCHS )); }
 if [[ "${USE_EMA}" == "0" ]]; then
     EMA_OFF=1
 fi
 if [[ -n "${EPOCHS}" ]]; then
     LINK=1
-    NOAUG_EFF="${CFG_NOAUG}"; (( NOAUG_EFF > 0 )) || NOAUG_EFF=8
-    if (( ! EMA_OFF )) && (( EPOCHS_EFF - NOAUG_EFF <= 4 )); then
-        echo "EPOCHS=${EPOCHS_EFF} 太小(需 > no_aug_epoch(${NOAUG_EFF}) + 4)" >&2
+    T_EFF=$(( EPOCHS_EFF - CFG_NOAUG ))              # 有效训练段长度(no_aug 尾段保持不变)
+    if (( ! EMA_OFF )) && (( T_EFF <= 4 )); then
+        echo "EPOCHS=${EPOCHS_EFF} 太小(需 > no_aug_epoch(${CFG_NOAUG}) + 4)" >&2
         exit 1
     fi
-    STOP_EFF=$(( EPOCHS_EFF - NOAUG_EFF ))          # no_aug 尾段长度保持不变
-    if (( CFG_EPOCHS > 0 )); then
-        FLAT_EFF=$(scale_epoch "${CFG_FLAT}")
+    STOP_EFF=$T_EFF
+    if (( T_EFF > 4 )); then
+        FLAT_EFF=$(( 4 + T_EFF / 2 ))                # 官方公式:flat = 4 + T//2
+    else
+        FLAT_EFF=$(( EPOCHS_EFF / 2 ))               # 仅 EMA=0 的极小规模兜底
     fi
-    (( FLAT_EFF > 4 )) || FLAT_EFF=$(( EPOCHS_EFF / 2 ))    # 保护:至少大于 warmup 起点 4
+    (( FLAT_EFF < STOP_EFF )) || (( EMA_OFF )) || FLAT_EFF=$(( STOP_EFF - 1 ))
 fi
 if (( EMA_OFF )); then
     # 纯 stage1:stop_epoch 设为 epoches+1,det_solver 的 epoch==stop_epoch 永不命中,
@@ -233,8 +246,9 @@ if [[ "${LINK}" == "1" || "${EMA_OFF}" == "1" ]]; then
         CB_EPOCH="[4, ${STOP_EFF}]"
     fi
     if (( CFG_MATCH >= 0 && LINK )); then
-        if (( CFG_EPOCHS > 0 )); then
-            MATCH_EPOCH=$(scale_epoch "${CFG_MATCH}")
+        if (( T_EFF > 0 && CFG_STOP > 0 )); then
+            # 保留各模型原本的 CFG_MATCH/CFG_STOP 比例(X=90%、L≈83%、M≈89%、S≈83%),四舍五入
+            MATCH_EPOCH=$(( (CFG_MATCH * T_EFF + CFG_STOP / 2) / CFG_STOP ))
         else
             MATCH_EPOCH=$(( (77 * EPOCHS_EFF + 50) / 100 ))
         fi
