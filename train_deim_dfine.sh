@@ -30,6 +30,15 @@ cd /workspace/DEIMv2
 #                                              stop=T;flat=4+T//2;policy=[4,flat,T];
 #                                              mixup=[4,flat];copyblend 终点=T;
 #                                              matcher=yml_match×T/yml_stop(保留各模型原比例)
+#   batch 基准                             -> 自动取 yml 的 train_dataloader.total_batch_size
+#                                            (官方 COCO 配方基准,当前 32)。改 TRAIN_BATCH_SIZE 时
+#                                            脚本按 r=TRAIN_BATCH_SIZE/该值 自动换算
+#                                            ema.decay = 1-(1-yml_decay)×r,让"看过多少样本"的 EMA
+#                                            视界不变(batch=32 时 r=1,不注入);
+#                                            warmup_iter / ema.warmups 本来就按 iters_per_epoch
+#                                            推导(∝1/batch),无需干预。
+#   SCALE_LR=0(可选)                      -> 是否按 r 线性缩放基础 lr(optimizer.lr);
+#                                            param 组 lr 与 ema.decay 一样是无条件换算
 #   VAL_BATCH_SIZE                        -> 验证集总 batch(默认与 TRAIN_BATCH_SIZE 相同)
 #   MASTER_PORT                           -> torchrun 端口(默认 29500;并发跑多个实验时分别指定)
 #
@@ -45,6 +54,7 @@ DEVICE="${DEVICE:-cuda}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-8}"   # 所有 rank 的总 batch
 VAL_BATCH_SIZE="${VAL_BATCH_SIZE:-${TRAIN_BATCH_SIZE:-8}}"   # 所有 rank 的总 batch
+SCALE_LR="${SCALE_LR:-0}"                   # 1=按 r 线性缩放 lr(可选;小数据微调建议先保持 0)
 NUM_WORKERS="${NUM_WORKERS:-6}"
 MASTER_PORT="${MASTER_PORT:-}"              # torchrun 端口(留空用默认 29500)
 # 留空则使用 yml 配置自带的 epoches(x/l=58、m=102、s=132);显式设置时覆盖
@@ -96,12 +106,18 @@ if [[ "${VAL_BATCH_SIZE}" -le 0 || $((VAL_BATCH_SIZE % NPROC_PER_NODE)) -ne 0 ]]
     echo "VAL_BATCH_SIZE=${VAL_BATCH_SIZE} must be a positive multiple of NPROC_PER_NODE=${NPROC_PER_NODE}" >&2
     exit 1
 fi
+if [[ "${SCALE_LR}" != "0" && "${SCALE_LR}" != "1" ]]; then
+    echo "SCALE_LR must be 0 or 1, got: ${SCALE_LR}" >&2
+    exit 1
+fi
 
 # 读取:yml 自带的 epoches/stop_epoch(x/l=50、m=90、s=120)/no_aug/flat(及可选的
 #       copyblend/matcher 窗口)、训练图数、类别数(自动从 TRAIN_ANN 读取)、
 #       以及 RESUME ckpt 的类别数(用于一致性校验)
-if ! read -r CFG_EPOCHS CFG_STOP N_TRAIN N_CLASSES CFG_NOAUG CFG_FLAT CFG_CB CFG_MATCH RESUME_NC \
-    < <(python3 - "${CONFIG}" "${TRAIN_ANN}" "${RESUME}" <<'PY'
+if ! IFS=$'\x1f' read -r CFG_EPOCHS CFG_STOP N_TRAIN N_CLASSES CFG_NOAUG CFG_FLAT CFG_CB CFG_MATCH \
+    RESUME_NC BATCH_INFO DECAY_UPD LR_BASE_UPD LR_PARAMS_UPD \
+    < <(python3 - "${CONFIG}" "${TRAIN_ANN}" "${RESUME}" \
+                  "${TRAIN_BATCH_SIZE}" "${SCALE_LR}" <<'PY'
 import json
 import os
 import re
@@ -109,6 +125,7 @@ import sys
 import warnings
 
 import torch
+import yaml
 from engine.core import YAMLConfig
 
 warnings.filterwarnings("ignore")
@@ -162,8 +179,64 @@ if resume_path:
             resume_nc = int(v.shape[0])
             break
 
-# 必须单行输出(read 只消费第一行)
-print(cfg_epochs, cfg_stop, n_train, n_classes, cfg_noaug, cfg_flat, cfg_cb, cfg_match, resume_nc)
+# ---- batch 联动:r = TRAIN_BATCH_SIZE / yml 的 total_batch_size ----
+# EMA 更新和 LR warmup 都按 optimizer step 计,batch 变了要让"看过多少样本"的尺度不变:
+#   ema.decay  d' = 1-(1-d)*r   (官方给的固定换算,不做开关;EMA 视界 ≈1/(1-d) 步)
+#   params 组 lr  l' = l*r      (官方标 "doubled, linear scaling law",不可选/无条件)
+#   基础 lr       l' = l*r      (官方标 "if needed",可选 → SCALE_LR=1)
+# warmup_iter / ema.warmups 由脚本按 iters_per_epoch 推导(∝1/batch),不在这里处理。
+# 基准 batch = yml 的 train_dataloader.total_batch_size(官方 COCO 配方基准,当前 32),
+# r = TRAIN_BATCH_SIZE / 该值 即"相对官方配方 batch 的缩放比";batch=32 时 r=1,等同官方原样。
+batch_new = float(sys.argv[4])
+scale_lr = sys.argv[5] == "1"
+cfg_batch = (y.get("train_dataloader") or {}).get("total_batch_size")
+batch_ref = float(cfg_batch) if cfg_batch else batch_new
+r = batch_new / batch_ref
+opt = y.get("optimizer", {}) or {}
+ema_cfg = y.get("ema", {}) or {}
+decay0 = float(ema_cfg.get("decay", 0.9999))
+lr0 = opt.get("lr")
+groups = opt.get("params") or []
+
+decay_upd, lr_base_upd, lr_params_upd = "", "", ""
+if not cfg_batch:
+    batch_info = f"batch {batch_new:g};yml 未声明 total_batch_size,跳过 batch 联动"
+elif abs(r - 1.0) < 1e-12:
+    batch_info = f"batch {batch_new:g} = 基准 {batch_ref:g}(yml) -> r=1;ema.decay/lr 保持 yml 原值"
+else:
+    batch_info = f"batch {batch_new:g} / 基准 {batch_ref:g}(yml) -> r={r:g}"
+    d = round(1 - (1 - decay0) * r, 8)
+    decay_upd = f"ema.decay={d:.10g}"
+    batch_info += f";ema.decay {decay0:g}->{d:g}"
+    # (1) param 组 lr:官方标 "doubled, linear scaling law"(不可选)→ 随 r 一并换算
+    n_lr = 0
+    scaled = []
+    for g in groups:
+        g = dict(g)
+        if g.get("lr") is not None:
+            g["lr"] = float(g["lr"]) * r
+            n_lr += 1
+        scaled.append(g)
+    if n_lr:
+        # 流式 YAML 单行输出;parse_cli 会把整张 param 组表替换进 yaml_cfg
+        lr_params_upd = "optimizer.params=" + yaml.safe_dump(
+            scaled, default_flow_style=True, width=10 ** 9).strip()
+        uniq = sorted({round(float(g["lr"]), 12) for g in groups if g.get("lr") is not None})
+        batch_info += ";param 组 lr " + ",".join(f"{o:g}->{o * r:g}" for o in uniq) + f"(共 {n_lr} 组)"
+    # (2) 基础 optimizer.lr(未在 params 里写 lr 的组用它):官方标 "if needed"(可选)
+    if lr0 is not None:
+        if scale_lr:
+            lr_base_upd = "optimizer.lr=%.10g" % (float(lr0) * r)
+            batch_info += f";基础 lr {float(lr0):g}->{float(lr0) * r:g}(SCALE_LR=1)"
+        else:
+            batch_info += f";基础 lr {float(lr0):g} 未换算(SCALE_LR=0)"
+
+# 必须单行输出(read -r 只消费第一行),字段用 0x1f 分隔:BATCH_INFO 含空格、
+# LR_PARAMS_UPD 含流式列表的逗号+空格,所以不能用空格分词;而用 TAB 的话 bash
+# 的 read 会折叠连续的 IFS 空白,未注入的字段会串位。
+print("\x1f".join(str(v) for v in (
+    cfg_epochs, cfg_stop, n_train, n_classes, cfg_noaug, cfg_flat, cfg_cb, cfg_match, resume_nc,
+    batch_info, decay_upd, lr_base_upd, lr_params_upd)))
 PY
 ); then
     echo "解析配置/标注失败:请检查上方 python 报错(常见原因:标注文件损坏/缺 categories、RESUME 不可读)" >&2
@@ -182,6 +255,14 @@ if ! [[ "${CFG_CB}" =~ ^-?[0-9]+$ && "${CFG_MATCH}" =~ ^-?[0-9]+$ && "${RESUME_N
     echo "解析失败(CFG_CB=${CFG_CB} CFG_MATCH=${CFG_MATCH} RESUME_NC=${RESUME_NC})" >&2
     exit 1
 fi
+# batch 联动注入项格式校验(避免 python 段异常时把畸形字符串塞进 -u)
+[[ -z "${DECAY_UPD}" || "${DECAY_UPD}" =~ ^ema\.decay=[0-9.eE+-]+$ ]] \
+    || { echo "解析失败(DECAY_UPD=${DECAY_UPD})" >&2; exit 1; }
+[[ -z "${LR_BASE_UPD}" || "${LR_BASE_UPD}" =~ ^optimizer\.lr=[0-9.eE+-]+$ ]] \
+    || { echo "解析失败(LR_BASE_UPD=${LR_BASE_UPD})" >&2; exit 1; }
+[[ -z "${LR_PARAMS_UPD}" || "${LR_PARAMS_UPD}" =~ ^optimizer\.params=\[.+\]$ ]] \
+    || { echo "解析失败(LR_PARAMS_UPD 不是流式 param 组列表)" >&2; exit 1; }
+[[ -n "${BATCH_INFO}" ]] || { echo "解析失败(BATCH_INFO 为空)" >&2; exit 1; }
 
 # 续训 ckpt 与数据类别数一致性(不一致时 strict 加载会崩,这里提前拦截)
 if (( RESUME_NC >= 0 )) && (( RESUME_NC != N_CLASSES )); then
@@ -248,7 +329,8 @@ fi
 echo "--------------------------------------------------------------"
 echo "[data]   train images: ${N_TRAIN} -> ${ITERS_PER_EPOCH} iters/epoch (total_batch=${TRAIN_BATCH_SIZE}) | num_classes=${N_CLASSES} (auto from annotations)"
 echo "[sched]  epoches=${EPOCHS_EFF} (yml=${CFG_EPOCHS}${EPOCHS:+ / EPOCHS env override}) stop_epoch=${STOP_EFF} total_iters=${TOTAL_ITERS} warmup_iter=${WARMUP_ITER} (quadratic warmup ends at epoch $((WARMUP_ITER / ITERS_PER_EPOCH + 1)))"
-echo "[ema]    ema_warmups=${EMA_WARMUPS}"
+echo "[ema]    ema_warmups=${EMA_WARMUPS} (按 iters_per_epoch 自动,∝1/batch)"
+echo "[batch]  ${BATCH_INFO}"
 if [[ "${LINK}" == "1" ]]; then
     echo "[link]   EPOCHS=${EPOCHS} 联动: stop_epoch=${STOP_EFF} flat_epoch=${FLAT_EFF} policy=${POLICY_EPOCH} mixup=${MIXUP_EPOCH}${CB_EPOCH:+ copyblend=${CB_EPOCH}}${MATCH_EPOCH:+ matcher_change=${MATCH_EPOCH}}"
 fi
@@ -307,6 +389,18 @@ if [[ "${LINK}" == "1" ]]; then
         UPDATES+=("DEIMCriterion.matcher.matcher_change_epoch=${MATCH_EPOCH}")
     fi
 fi
+
+# batch 联动:注入换算后的 ema.decay(以及可选的 lr / param 组 lr)
+if [[ -n "${DECAY_UPD}" ]]; then
+    UPDATES+=("${DECAY_UPD}")
+fi
+if [[ -n "${LR_BASE_UPD}" ]]; then
+    UPDATES+=("${LR_BASE_UPD}")
+fi
+if [[ -n "${LR_PARAMS_UPD}" ]]; then
+    UPDATES+=("${LR_PARAMS_UPD}")
+fi
+
 ARGS+=(-u "${UPDATES[@]}")
 
 # use_ema/ema.warmups 必须紧跟 -u 列表之后(中间不能插入其它选项),
