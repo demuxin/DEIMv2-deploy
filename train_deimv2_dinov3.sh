@@ -12,8 +12,7 @@ cd /workspace/DEIMv2
 # OUTPUT_DIR=outputs/deimv2_dinov3_x_charging_gun_nc4_3 \
 # ./train_deimv2_dinov3.sh
 #
-# 脚本从标注 json 自动读出训练图数,算出 iters_per_epoch,按比例自动生成 warmup_iter/ema.warmups,
-# 并自动防呆(EMA 关时禁止训练 epoches 超过配置的 stop_epoch,避免撞上 self.ema.decay 空指针)。
+# 脚本从标注 json 自动读出训练图数,算出 iters_per_epoch,按比例自动生成 warmup_iter/ema.warmups。
 # 换数据时你只改 DATA_ROOT 和 batch。
 #
 # 用户开关 —— 换数据集时只需要动这些:
@@ -32,10 +31,6 @@ cd /workspace/DEIMv2
 #                                              stop=T;flat=4+T//2;policy=[4,flat,T];
 #                                              mixup=[4,flat];copyblend 终点=T;
 #                                              matcher=yml_match×T/yml_stop(保留各模型原比例)
-#   USE_EMA=1(默认)                        -> 完整两段式训练(stage1 带增强 ->
-#                                            stage2 去增强 + EMA 刷新,输出 best_stg2.pth)
-#   USE_EMA=0                             -> 只跑 stage1:脚本自动把 stop_epoch 联动为
-#                                            epoches+1(stage2/EMA 刷新永不触发,增强全程保留)
 #   VAL_BATCH_SIZE                        -> 验证集总 batch(默认与 TRAIN_BATCH_SIZE 相同)
 #   MASTER_PORT                           -> torchrun 端口(默认 29500;并发跑多个实验时分别指定)
 #
@@ -55,7 +50,6 @@ NUM_WORKERS="${NUM_WORKERS:-6}"
 MASTER_PORT="${MASTER_PORT:-}"              # torchrun 端口(留空用默认 29500)
 # 留空则使用 yml 配置自带的 epoches(x=58、l=68、m=102、s=132);显式设置时覆盖
 EPOCHS="${EPOCHS:-}"
-USE_EMA="${USE_EMA:-1}"
 SEED="${SEED:-0}"
 USE_AMP="${USE_AMP:-1}"
 # 手动覆盖自动推导值(通常保持为空即可):
@@ -102,10 +96,6 @@ if [[ "${TRAIN_BATCH_SIZE}" -le 0 || $((TRAIN_BATCH_SIZE % NPROC_PER_NODE)) -ne 
 fi
 if [[ "${VAL_BATCH_SIZE}" -le 0 || $((VAL_BATCH_SIZE % NPROC_PER_NODE)) -ne 0 ]]; then
     echo "VAL_BATCH_SIZE=${VAL_BATCH_SIZE} must be a positive multiple of NPROC_PER_NODE=${NPROC_PER_NODE}" >&2
-    exit 1
-fi
-if [[ "${USE_EMA}" != "0" && "${USE_EMA}" != "1" ]]; then
-    echo "USE_EMA must be 0 or 1, got: ${USE_EMA}" >&2
     exit 1
 fi
 
@@ -209,52 +199,38 @@ if (( EPOCHS_EFF <= 0 )); then
     exit 1
 fi
 
-# ---- EPOCHS 单变量联动 + USE_EMA=0 纯 stage1 处理 ----
+# ---- EPOCHS 单变量联动 ----
 # 官方以"有效训练段" T = epoches - no_aug_epoch 为基准定义中后段策略:
 #   stop_epoch = T;flat_epoch = 4 + T//2;policy = [4, flat, T];mixup = [4, flat];
 #   copyblend 终点 = T;matcher_change = 各模型原比例(CFG_MATCH/CFG_STOP) × T
-LINK=0; EMA_OFF=0
+LINK=0
 STOP_EFF="${CFG_STOP}"
 FLAT_EFF="${CFG_FLAT}"
 POLICY_EPOCH=""; MIXUP_EPOCH=""; CB_EPOCH=""; MATCH_EPOCH=""
-if [[ "${USE_EMA}" == "0" ]]; then
-    EMA_OFF=1
-fi
 if [[ -n "${EPOCHS}" ]]; then
     LINK=1
     T_EFF=$(( EPOCHS_EFF - CFG_NOAUG ))              # 有效训练段长度(no_aug 尾段保持不变)
-    if (( ! EMA_OFF )) && (( T_EFF <= 4 )); then
+    if (( T_EFF <= 4 )); then
         echo "EPOCHS=${EPOCHS_EFF} 太小(需 > no_aug_epoch(${CFG_NOAUG}) + 4)" >&2
         exit 1
     fi
     STOP_EFF=$T_EFF
-    if (( T_EFF > 4 )); then
-        FLAT_EFF=$(( 4 + T_EFF / 2 ))                # 官方公式:flat = 4 + T//2
-    else
-        FLAT_EFF=$(( EPOCHS_EFF / 2 ))               # 仅 EMA=0 的极小规模兜底
+    FLAT_EFF=$(( 4 + T_EFF / 2 ))                    # 官方公式:flat = 4 + T//2
+    if (( FLAT_EFF >= STOP_EFF )); then
+        FLAT_EFF=$(( STOP_EFF - 1 ))
     fi
-    (( FLAT_EFF < STOP_EFF )) || (( EMA_OFF )) || FLAT_EFF=$(( STOP_EFF - 1 ))
-fi
-if (( EMA_OFF )); then
-    # 纯 stage1:stop_epoch 设为 epoches+1,det_solver 的 epoch==stop_epoch 永不命中,
-    # stage2/EMA 刷新不触发,增强(含尾段策略)全程保留
-    STOP_EFF=$(( EPOCHS_EFF + 1 ))
-fi
-if [[ "${LINK}" == "1" || "${EMA_OFF}" == "1" ]]; then
     POLICY_EPOCH="[4, ${FLAT_EFF}, ${STOP_EFF}]"
+    MIXUP_EPOCH="[4, ${FLAT_EFF}]"
     if (( CFG_CB >= 0 )); then
         CB_EPOCH="[4, ${STOP_EFF}]"
     fi
-    if (( CFG_MATCH >= 0 && LINK )); then
-        if (( T_EFF > 0 && CFG_STOP > 0 )); then
+    if (( CFG_MATCH >= 0 )); then
+        if (( CFG_STOP > 0 )); then
             # 保留各模型原本的 CFG_MATCH/CFG_STOP 比例(X=90%、L≈83%、M≈89%、S≈83%),四舍五入
             MATCH_EPOCH=$(( (CFG_MATCH * T_EFF + CFG_STOP / 2) / CFG_STOP ))
         else
             MATCH_EPOCH=$(( (77 * EPOCHS_EFF + 50) / 100 ))
         fi
-    fi
-    if (( LINK )); then
-        MIXUP_EPOCH="[4, ${FLAT_EFF}]"
     fi
 fi
 
@@ -274,10 +250,7 @@ fi
 echo "--------------------------------------------------------------"
 echo "[data]   train images: ${N_TRAIN} -> ${ITERS_PER_EPOCH} iters/epoch (total_batch=${TRAIN_BATCH_SIZE}) | num_classes=${N_CLASSES} (auto from annotations)"
 echo "[sched]  epoches=${EPOCHS_EFF} (yml=${CFG_EPOCHS}${EPOCHS:+ / EPOCHS env override}) stop_epoch=${STOP_EFF} total_iters=${TOTAL_ITERS} warmup_iter=${WARMUP_ITER} (quadratic warmup ends at epoch $((WARMUP_ITER / ITERS_PER_EPOCH + 1)))"
-echo "[ema]    use_ema=${USE_EMA} ema_warmups=${EMA_WARMUPS}"
-if [[ "${EMA_OFF}" == "1" ]]; then
-    echo "[stage]  USE_EMA=0 纯 stage1: stop_epoch 联动为 epoches+1(${STOP_EFF}),stage2/EMA 刷新不触发,增强全程保留"
-fi
+echo "[ema]    ema_warmups=${EMA_WARMUPS}"
 if [[ "${LINK}" == "1" ]]; then
     echo "[link]   EPOCHS=${EPOCHS} 联动: stop_epoch=${STOP_EFF} flat_epoch=${FLAT_EFF} policy=${POLICY_EPOCH} mixup=${MIXUP_EPOCH}${CB_EPOCH:+ copyblend=${CB_EPOCH}}${MATCH_EPOCH:+ matcher_change=${MATCH_EPOCH}}"
 fi
@@ -350,18 +323,14 @@ UPDATES=(
 if [[ -n "${EPOCHS}" ]]; then
     UPDATES=("epoches=${EPOCHS}" "${UPDATES[@]}")
 fi
-# EPOCHS 联动 / USE_EMA=0 纯 stage1:注入推导出的 epoch 尺度窗口
-if [[ "${LINK}" == "1" || "${EMA_OFF}" == "1" ]]; then
+# EPOCHS 联动:注入推导出的 epoch 尺度窗口
+if [[ "${LINK}" == "1" ]]; then
     UPDATES+=(
         "train_dataloader.collate_fn.stop_epoch=${STOP_EFF}"
         "train_dataloader.dataset.transforms.policy.epoch=${POLICY_EPOCH}"
+        "flat_epoch=${FLAT_EFF}"
+        "train_dataloader.collate_fn.mixup_epochs=${MIXUP_EPOCH}"
     )
-    if [[ "${LINK}" == "1" ]]; then
-        UPDATES+=(
-            "flat_epoch=${FLAT_EFF}"
-            "train_dataloader.collate_fn.mixup_epochs=${MIXUP_EPOCH}"
-        )
-    fi
     if [[ -n "${CB_EPOCH}" ]]; then
         UPDATES+=("train_dataloader.collate_fn.copyblend_epochs=${CB_EPOCH}")
     fi
@@ -373,12 +342,10 @@ ARGS+=(-u "${UPDATES[@]}")
 
 # use_ema/ema.warmups 必须紧跟 -u 列表之后(中间不能插入其它选项),
 # 这样才会被 -u 的 nargs='+' 吞进 update 列表:
-if [[ "${USE_EMA}" == "1" ]]; then
-    ARGS+=(
-        "use_ema=True"
-        "ema.warmups=${EMA_WARMUPS}"
-    )
-fi
+ARGS+=(
+    "use_ema=True"
+    "ema.warmups=${EMA_WARMUPS}"
+)
 
 if [[ "${USE_AMP}" == "1" ]]; then
     ARGS+=(--use-amp)
