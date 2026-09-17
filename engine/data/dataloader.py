@@ -136,6 +136,9 @@ class BatchImageCollateFunction(BaseCollateFunction):
         base_size=640,
         base_size_repeat=None,
         scale_range=(0.85, 1.25),
+        resize_in_collate=False,
+        resize_interpolation='bilinear',
+        resize_antialias=True,
         mixup_prob=0.0,
         mixup_epochs=[0, 0],
         copyblend_prob=0.0,
@@ -160,6 +163,14 @@ class BatchImageCollateFunction(BaseCollateFunction):
                        if (base_size_repeat is not None and self.scale_range is not None) else None)
         self.stop_epoch = stop_epoch if stop_epoch is not None else 100000000
         self.ema_restart_decay = ema_restart_decay
+
+        # resize_in_collate=True:数据集侧不做 Resize(训练 transforms 里注释掉 Resize op),
+        # 由本 collate 逐样本 VF.resize 到目标尺寸 —— 全程只有这一次重采样,且带抗锯齿
+        self.resize_in_collate = resize_in_collate
+        self.resize_interpolation = getattr(InterpolationMode, str(resize_interpolation).upper(),
+                                            InterpolationMode.BILINEAR)
+        self.resize_antialias = resize_antialias
+
         self.mixup_prob, self.mixup_epochs = mixup_prob, mixup_epochs
 
         self.copyblend_prob, self.copyblend_epochs, self.copyblend_type = copyblend_prob, copyblend_epochs, copyblend_type
@@ -190,6 +201,10 @@ class BatchImageCollateFunction(BaseCollateFunction):
                 print("     ### Multi-scales@ {} ###        ".format(self.scales))
             else:
                 print("     ### Multi-scale DISABLED (scale_range=null) ###")
+            if self.resize_in_collate:
+                print("     ### Collate-side resize ENABLED: 逐样本 VF.resize({}, antialias={}) "
+                      "### ".format(resize_interpolation, resize_antialias))
+                print("     ###   -> 训练 transforms 里必须注释掉 Resize op(否则会缩放两次) ### ")
         self.print_info_flag = True
         self.print_copyblend_flag = True
         # self.interpolation = interpolation
@@ -389,13 +404,38 @@ class BatchImageCollateFunction(BaseCollateFunction):
         return images, targets
 
     def __call__(self, items):
-        images = torch.cat([x[0][None] for x in items], dim=0)
         targets = [x[1] for x in items]
 
-        # Mixup
+        if self.resize_in_collate:
+            if 'masks' in targets[0]:
+                raise NotImplementedError('resize_in_collate 暂不支持 masks')
+            # 整批取同一个目标尺寸:多尺度窗口内随机,窗口外(no-aug 尾段)固定 base_size
+            if self.scales is not None and self.epoch < self.stop_epoch:
+                sz = random.choice(self.scales)
+            else:
+                sz = self.base_size
+            sz = [sz, sz] if isinstance(sz, int) else [int(sz[0]), int(sz[1])]
+            # 逐样本 resize 后再 stack:各样本尺寸可以不同(增强后未统一),这里一次到位
+            images = torch.stack([
+                VF.resize(x[0], sz,
+                          interpolation=self.resize_interpolation,
+                          antialias=self.resize_antialias)
+                for x in items
+            ], dim=0)
+        else:
+            shapes = {tuple(x[0].shape[-2:]) for x in items}
+            if len(shapes) > 1:
+                raise RuntimeError(
+                    f"batch 内图像尺寸不一致 {sorted(shapes)} —— 训练 transforms 里的 Resize 被去掉了?"
+                    f" 若要用 collate 侧单次重采样,请设 train_dataloader.collate_fn.resize_in_collate=True;"
+                    f" 否则请恢复 Resize op")
+            images = torch.cat([x[0][None] for x in items], dim=0)
+
+        # Mixup(resize 之后做,与老仓库一致)
         images, targets = self.apply_mixup(images, targets)
 
-        if self.scales is not None and self.epoch < self.stop_epoch:
+        # 旧路径:批级多尺度插值(新路径上面已逐样本 resize 完)
+        if not self.resize_in_collate and self.scales is not None and self.epoch < self.stop_epoch:
             # sz = random.choice(self.scales)
             # sz = [sz] if isinstance(sz, int) else list(sz)
             # VF.resize(inpt, sz, interpolation=self.interpolation)

@@ -83,7 +83,9 @@ train_dataloader:
         - {type: RandomIoUCrop, p: 0.8}
         - {type: SanitizeBoundingBoxes, min_size: 1}
         - {type: RandomHorizontalFlip}
-        - {type: Resize, size: *input_size, }
+        # ↓ 单次重采样:要用 collate 侧 resize 时,注释掉本行并把
+        #   下面 collate_fn.resize_in_collate 设为 True;默认保留本行(两次重采样)
+        # - {type: Resize, size: *input_size, }
         - {type: SanitizeBoundingBoxes, min_size: 1}
         - {type: ConvertPILImage, dtype: 'float32', scale: True}
         - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
@@ -98,6 +100,9 @@ train_dataloader:
     stop_epoch: 50
     copyblend_epochs: [4, 50]
     base_size_repeat: 3
+    # 单次重采样开关:True = 不做数据集侧 Resize,由 collate 逐样本 VF.resize(抗锯齿)一次到位。
+    # 启用时必须同时注释掉上面 train transforms 里的 Resize op(否则缩放两次)。
+    resize_in_collate: True
 
 val_dataloader:
   dataset:
