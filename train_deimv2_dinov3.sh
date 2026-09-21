@@ -4,12 +4,16 @@ set -euo pipefail
 # 在 deimv2_dev 容器内运行本脚本。
 cd /workspace/DEIMv2
 
+# PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+# NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=96 MODEL=x EPOCHS=80 OUTPUT_DIR=outputs/deimv2_dinov3_x_personcaraninal ./train_deimv2_dinov3.sh
+# NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=96 MODEL=l EPOCHS=80 OUTPUT_DIR=outputs/deimv2_dinov3_l_personcaraninal ./train_deimv2_dinov3.sh
+
 # ============================================================================
 #
 # 默认训练命令：
 # RESUME=/workspace/DEIMv2/outputs/deimv2_dinov3_x_charging_gun_nc4/last.pth \
 # NPROC_PER_NODE=8 TRAIN_BATCH_SIZE=8 MODEL=x \
-# OUTPUT_DIR=outputs/deimv2_dinov3_x_charging_gun_nc4_3 \
+# OUTPUT_DIR=outputs/deimv2_dinov3_x_personcaraninal \
 # ./train_deimv2_dinov3.sh
 #
 # 脚本从标注 json 自动读出训练图数,算出 iters_per_epoch,按比例自动生成 warmup_iter/ema.warmups。
@@ -69,7 +73,7 @@ EMA_WARMUPS="${EMA_WARMUPS:-}"
 # 为空则从头开始。注意:续训需保持数据/参数与上次一致。
 RESUME="${RESUME:-}"
 
-DATA_ROOT="${DATA_ROOT:-/workspace/dataset/充电枪落地/coco20260910_nc4}"
+DATA_ROOT="${DATA_ROOT:-/dataset/person_car_animal/coco20260911_nc81}"
 TRAIN_IMAGES="${TRAIN_IMAGES:-${DATA_ROOT}/train2017}"
 TRAIN_ANN="${TRAIN_ANN:-${DATA_ROOT}/annotations/train_annotation.json}"
 VAL_IMAGES="${VAL_IMAGES:-${DATA_ROOT}/val2017}"
