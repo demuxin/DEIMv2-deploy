@@ -12,6 +12,25 @@ from ..utils import cat_keep_shapes, uncat_with_shapes
 from torch import Tensor, nn
 
 
+def scaled_dot_product_attention(q, k, v, **kwargs):
+    """`F.scaled_dot_product_attention` 的包装:**注意力始终在 FP32 里算**。
+
+    背景:ViT 注意力的 `q·k` 是逐通道累加,量级会比 q/k 本身大几个数量级。
+    实测某个 L 模型 block0 的 `|q·k|·scale` 达到 2.5e6,是 FP16 上限 65504 的 38 倍 ——
+    在 FP16 下会变成 Inf,`softmax(Inf)` 就是 NaN,再顺残差污染整张图
+    (整个网络输出全 NaN)。所以只要输入可能是半精度就必须保护,不只是导出那一次。
+
+    对训练零影响(**实测 FP32 与 AMP 两种模式下前向均与改动前逐位相同**):
+      - 纯 FP32:`q.float()` 对 float32 是空操作,`.to(v.dtype)` 同理;
+      - AMP:autocast 本来就会把 SDPA 提升到 FP32 执行,这里只是把提升显式化。
+
+    覆盖的场景:ONNX 导出 trace、导出脚本在 trace 之前的 eager 前向、
+    以及直接在 PyTorch 里跑半精度模型(--fp16 导出的模型也可以这样验)。
+    """
+    return F.scaled_dot_product_attention(
+        q.float(), k.float(), v.float(), **kwargs).to(v.dtype)
+
+
 # RoPE-related functions:
 def rope_rotate_half(x: Tensor) -> Tensor:
     # x:   [ x0  x1  x2  x3  x4  x5]
@@ -113,7 +132,7 @@ class SelfAttention(nn.Module):
         q, k, v = [t.transpose(1, 2) for t in [q, k, v]]
         if rope is not None:
             q, k = self.apply_rope(q, k, rope)
-        x = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+        x = scaled_dot_product_attention(q, k, v)
         x = x.transpose(1, 2)
         return x.reshape([B, N, C])
 
@@ -156,9 +175,9 @@ class CausalSelfAttention(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
         q, k, v = torch.unbind(qkv, 2)
         q, k, v = [t.transpose(1, 2) for t in [q, k, v]]
-        x = torch.nn.functional.scaled_dot_product_attention(
-            q, k, v, attn_mask=None, dropout_p=self.attn_drop if self.training else 0, is_causal=is_causal
-        )
+        x = scaled_dot_product_attention(
+            q, k, v, attn_mask=None,
+            dropout_p=self.attn_drop if self.training else 0, is_causal=is_causal)
         x = x.transpose(1, 2).contiguous().view(B, N, C)
         x = self.proj_drop(self.proj(x))
         return x

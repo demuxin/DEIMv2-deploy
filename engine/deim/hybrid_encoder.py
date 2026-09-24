@@ -432,8 +432,20 @@ class HybridEncoder(nn.Module):
                 pos_embed = self.build_2d_sincos_position_embedding(
                     self.eval_spatial_size[1] // stride, self.eval_spatial_size[0] // stride,
                     self.hidden_dim, self.pe_temperature)
-                setattr(self, f'pos_embed{idx}', pos_embed)
-                # self.register_buffer(f'pos_embed{idx}', pos_embed)
+                # 必须注册成 buffer 而不是普通属性:普通属性不会被 .to(device)/.half() 带走,
+                # 混合精度导出时它会留在 FP32,encoder 里 `src + pos_embed` 就把激活提升回 FP32,
+                # 后面跟 FP16 的权重对不上:
+                #   RuntimeError: expected m1 and m2 to have the same dtype, but got: float != Half
+                #
+                # 注意:这里**不能**用 is_in_onnx_export() 做分支。_reset_parameters() 是在
+                # __init__ 里调用的,而模型在 torch.onnx.export() 之前就已经构造好了 ——
+                # 那时 is_in_onnx_export() 必然是 False,加了分支反而会退回 setattr,
+                # 导出时 pos_embed 又变回 FP32,问题原封不动。
+                #
+                # persistent=False: 它由 eval_spatial_size 推导而来,不进 state_dict,
+                # 这样既不改动 checkpoint 结构,又能跟着 module 走 dtype/device。
+                # 已实测:state_dict() 键集合与改动前完全一致,FP32/AMP 前向逐位相同。
+                self.register_buffer(f'pos_embed{idx}', pos_embed, persistent=False)
 
     @staticmethod
     def build_2d_sincos_position_embedding(w, h, embed_dim=256, temperature=10000.):

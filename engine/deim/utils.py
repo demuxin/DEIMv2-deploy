@@ -18,6 +18,18 @@ def inverse_sigmoid(x: torch.Tensor, eps: float=1e-5) -> torch.Tensor:
     x = x.clip(min=0., max=1.)
     return torch.log(x.clip(min=eps) / (1 - x).clip(min=eps))
 
+# 无效锚点(padding 位置)的填充值,各解码器的 _generate_anchors() 共用
+# (DEIMTransformer / DFINETransformer / RTDETRTransformerv2)。
+#
+# 本意是填 +inf —— sigmoid(inf) 正好是 1.0。但 inf 会被导出成 ONNX 常量,
+# 在 FP16 推理下与 0 相乘就是 NaN。改用一个"足够大但有限"的值:
+# sigmoid(100) 在 FP32/FP16 下都精确等于 1.0,与 inf 行为完全一致,
+# 但不会往计算图里引入 inf;训练时梯度同样是 0(饱和区)。
+#
+# 注意:这必须在**构造期**生效,不能用 torch.onnx.is_in_onnx_export() 分支 ——
+# _generate_anchors() 在 __init__ 里被调用来生成 buffer,那时该函数必然为 False。
+ANCHOR_INVALID_FILL = 100.0
+
 
 def bias_init_with_prob(prior_prob=0.01):
     """initialize conv/fc bias value according to a given probability value."""
@@ -97,6 +109,24 @@ def deformable_attention_core_func_v2(\
         split_shape = [h * w for h, w in value_spatial_shapes]
         value = value.permute(0, 2, 3, 1).flatten(0, 1).split(split_shape, dim=-1)
     _, Len_q, _, _, _ = sampling_locations.shape
+
+    # 采样网格的 dtype 必须和 value 一致,否则 F.grid_sample 直接报错:
+    #   RuntimeError: expected scalar type Half but found Float
+    # 网格是 offset_normalizer(由 torch.tensor(value_spatial_shapes) 现算的整型张量)
+    # 和 reference_points 混算出来的,导出 FP16 图时它会落到 FP32,而 value 已被 .half()。
+    #
+    # 这里是**硬报错**(不是精度问题),所以要覆盖"半精度模型被前向"的所有场景:
+    #   - 导出时的 trace(此时 is_in_onnx_export() 为真)
+    #   - 导出脚本在 trace 之前跑的那次 eager 前向(用来推 n_queries,此时为假)
+    # 反过来,autocast(AMP 训练)下绝不能插这一手:grid_sample 本来就会被提升到 FP32,
+    # 把网格降到 FP16 反而损失精度 —— 实测会改变 AMP 训练的前向结果(max|d|≈1.1)。
+    #
+    # 所以条件是"非 autocast 就对齐":dtype 不一致时本来就是 FP32 混 FP16,
+    # 对齐到 FP16 只是把网格从 FP32 降到 FP16(量级 0~1,精度足够)。
+    if ((torch.onnx.is_in_onnx_export() or not torch.is_autocast_enabled())
+            and isinstance(sampling_locations, torch.Tensor)
+            and sampling_locations.dtype != value[0].dtype):
+        sampling_locations = sampling_locations.to(value[0].dtype)
 
     # sampling_offsets [8, 480, 8, 12, 2]
     if method == 'default':

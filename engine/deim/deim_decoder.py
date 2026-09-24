@@ -19,7 +19,8 @@ from typing import List
 
 from ..core import register
 from .denoising import get_contrastive_denoising_training_group
-from .utils import deformable_attention_core_func_v2, get_activation, inverse_sigmoid, bias_init_with_prob
+from .utils import deformable_attention_core_func_v2, get_activation, inverse_sigmoid, \
+    bias_init_with_prob, ANCHOR_INVALID_FILL
 
 from .dfine_decoder import MSDeformableAttention, LQE, Integral
 from .dfine_utils import weighting_function, distance2bbox
@@ -448,7 +449,7 @@ class DEIMTransformer(nn.Module):
         anchors = torch.concat(anchors, dim=1).to(device)
         valid_mask = ((anchors > self.eps) * (anchors < 1 - self.eps)).all(-1, keepdim=True)
         anchors = torch.log(anchors / (1 - anchors))
-        anchors = torch.where(valid_mask, anchors, torch.inf)
+        anchors = torch.where(valid_mask, anchors, ANCHOR_INVALID_FILL)
 
         return anchors, valid_mask
 

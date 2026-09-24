@@ -19,8 +19,8 @@ from typing import List
 
 from .dfine_utils import weighting_function, distance2bbox
 from .denoising import get_contrastive_denoising_training_group
-from .utils import deformable_attention_core_func_v2, get_activation, inverse_sigmoid
-from .utils import bias_init_with_prob
+from .utils import deformable_attention_core_func_v2, get_activation, inverse_sigmoid, \
+    bias_init_with_prob, ANCHOR_INVALID_FILL
 from ..core import register
 
 __all__ = ['DFINETransformer']
@@ -263,7 +263,19 @@ class Integral(nn.Module):
     def forward(self, x, project):
         shape = x.shape
         x = F.softmax(x.reshape(-1, self.reg_max + 1), dim=1)
-        x = F.linear(x, project.to(x.device)).reshape(-1, 4)
+        # 必须同时对齐 dtype:project 是 weighting_function 产出的 FP32 张量,
+        # 混合精度(FP16)推理时只 .to(device) 会留下 FP32,和 FP16 的 x 对不上:
+        #   RuntimeError: expected scalar type Half but found Float
+        #
+        # 条件是"导出中 或 不在 autocast 下",不能只判断 is_in_onnx_export():
+        # 导出脚本在 torch.onnx.export() 之前还会跑一次 eager 前向(用来推 n_queries),
+        # 那次 is_in_onnx_export() 为 False 但模型已经是半精度,同样需要对齐。
+        # 而 autocast(AMP 训练)下要排除掉 —— 那里交给 F.linear 自己提升精度,
+        # 实测两种写法在 FP32/AMP 下前向均逐位相同。
+        if (torch.onnx.is_in_onnx_export() or not torch.is_autocast_enabled()):
+            x = F.linear(x, project.to(device=x.device, dtype=x.dtype)).reshape(-1, 4)
+        else:
+            x = F.linear(x, project.to(x.device)).reshape(-1, 4)
         return x.reshape(list(shape[:-1]) + [-1])
 
 
@@ -623,7 +635,7 @@ class DFINETransformer(nn.Module):
         anchors = torch.concat(anchors, dim=1).to(device)
         valid_mask = ((anchors > self.eps) * (anchors < 1 - self.eps)).all(-1, keepdim=True)
         anchors = torch.log(anchors / (1 - anchors))
-        anchors = torch.where(valid_mask, anchors, torch.inf)
+        anchors = torch.where(valid_mask, anchors, ANCHOR_INVALID_FILL)
 
         return anchors, valid_mask
 
