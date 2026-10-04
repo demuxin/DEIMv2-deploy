@@ -777,9 +777,7 @@ bbox prediction head
 nn.Linear(256, 4)
 ```
 
-只用于理解"检测 head 的输入输出关系"，**不是在冒充真实 D-FINE 实现。**
-
-这是后续读源码时必须保持的严谨性。
+只用于理解"检测 head 的输入输出关系"，**不是在冒充真实 D-FINE 实现**，这是后续读源码时必须保持的严谨性。
 
 ---
 
@@ -788,10 +786,7 @@ nn.Linear(256, 4)
 假设网络最终给出：
 
 ```text
-(cx, cy, w, h)
-
-=
-(0.50, 0.50, 0.25, 0.50)
+(cx, cy, w, h) = (0.50, 0.50, 0.25, 0.50)
 ```
 
 图片大小：
@@ -814,9 +809,7 @@ H = 640
 所以：
 
 ```text
-(cx, cy, w, h)
-=
-(320,320,160,320)
+(cx, cy, w, h) = (320,320,160,320)
 ```
 
 转换成 `xyxy`：
@@ -832,19 +825,7 @@ H = 640
 最终：
 
 ```text
-(x1,y1,x2,y2)
-=
-(240,160,400,480)
-```
-
-于是可以真的在图片上画：
-
-```text
-(240,160) ┌────────────┐
-          │            │
-          │   object   │
-          │            │
-          └────────────┘ (400,480)
+(x1,y1,x2,y2) = (240,160,400,480)
 ```
 
 这就是：
@@ -935,9 +916,7 @@ DEIM Dense O2O
 因此请先建立一个很重要的区分：
 
 ```text
-模型结构
-≠
-训练策略
+模型结构 ≠ 训练策略
 ```
 
 DEIM 的关键价值并不只是"换一个网络层"。
@@ -1041,7 +1020,7 @@ label + score + pixel bbox
 
 两条路线虽然内部实现不同，但都可以被我们统一理解为：
 
-\[ `\boxed{ Image \rightarrow Backbone \rightarrow Encoder \rightarrow Decoder \rightarrow Predictions }`{=tex} \]
+$\boxed{ Image \rightarrow Backbone \rightarrow Encoder \rightarrow Decoder \rightarrow Predictions }$
 
 这就是以后读整个仓库最重要的一级抽象。
 
@@ -1054,8 +1033,7 @@ label + score + pixel bbox
 > DINOv3 自己已经是 Transformer 了，那后面为什么还有 `HybridEncoder` 和
 > `DEIMTransformer`？
 
-因为"Transformer"只是计算模块类别，并不意味着所有 Transformer
-都承担相同职责。
+因为"Transformer"只是计算模块类别，并不意味着所有 Transformer 都承担相同职责。
 
 可以暂时这样理解：
 
@@ -1298,8 +1276,7 @@ w = 5
 
 信息仍然存在，只是数据组织形式改变。
 
-后面学习 deformable attention 时，`spatial_shapes` 等变量就是为了让
-Transformer 知道这些 flatten 后的位置原本来自哪些 feature level
+后面学习 deformable attention 时，`spatial_shapes` 等变量就是为了让 Transformer 知道这些 flatten 后的位置原本来自哪些 feature level
 和二维空间。
 
 ---
@@ -1452,11 +1429,7 @@ DINOv3+STA + DEIMTransformer
 20×20
 ```
 
-flatten 后共有：
-
-\[ 8400 \]
-
-个空间位置。
+flatten 后共有 [ 8400 ] 个空间位置。
 
 **结论 6**
 
@@ -1476,8 +1449,7 @@ flatten 后共有：
 
 Decoder 的 query feature 还不是最终 box。
 
-它还需要 classification/localization heads 和相应的 box
-refinement/representation 机制。
+它还需要 classification/localization heads 和相应的 box refinement/representation 机制。
 
 **结论 8**
 
@@ -1539,8 +1511,7 @@ Q8
 
 Q9
 
-为什么 DINOv3 已经是 Transformer，DEIMv2 后面仍然需要 `HybridEncoder` 和
-`DEIMTransformer`？
+为什么 DINOv3 已经是 Transformer，DEIMv2 后面仍然需要 `HybridEncoder` 和 `DEIMTransformer`？
 
 Q10
 
@@ -1635,8 +1606,7 @@ contiguous
 
 并重点解决一个源码阅读中的常见问题：
 
-> **为什么仅仅交换几个维度，Transformer 就能把二维 feature map 当成
-> token sequence？**
+> **为什么仅仅交换几个维度，Transformer 就能把二维 feature map 当成 token sequence？**
 
 之后再进入 CNN、Transformer、DETR，我们就不会被 shape 操作卡住。
 

@@ -87,7 +87,9 @@ torch.Size([4])
 
 数学上：
 
-\[ x`\in`{=tex}`\mathbb{R}`{=tex}\^{4} \]
+$$
+x \in \mathbb{R}^4
+$$
 
 ---
 
@@ -143,7 +145,9 @@ W = Width
 
 元素总数：
 
-\[ 2`\times3`{=tex}`\times640`{=tex}`\times640`{=tex} = 2,457,600 \]
+$$
+2 \times 3 \times 640 \times 640 = 2,457,600
+$$
 
 可以验证：
 
@@ -535,8 +539,7 @@ x = x.transpose(1, 2)
 
 # 9. 真实 DEIMv2 源码：Patch Embedding
 
-DEIMv2 官方 `engine/backbone/vit_tiny.py` 的 Patch Embedding 核心
-forward 是：
+DEIMv2 官方 `engine/backbone/vit_tiny.py` 的 Patch Embedding 核心 forward 是：
 
 ```python
 def forward(self, x):
@@ -812,7 +815,7 @@ V
     N,
     3,
     num_heads,
-    C // num_heads
+    C // head_dim
 )
 ```
 
@@ -950,8 +953,9 @@ C = h × d
 
 Attention：
 
-\[ Attention(Q,K,V) = softmax`\left`{=tex}( `\frac{QK^T}{\sqrt d}`{=tex}
-`\right`{=tex})V \]
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\left( \frac{QK^T}{\sqrt{d}} \right)V
+$$
 
 先看：
 
@@ -1027,7 +1031,7 @@ shape：
 [B,8,1600,32]
 ```
 
-应该立即知道：
+应该立即知道： 
 
 ```text
 8 × 32 = 256
@@ -1169,9 +1173,7 @@ queries = queries.expand(4, -1, -1)
 -1
 ```
 
-表示：
-
-> 这个维度保持原大小。
+表示这个维度保持原大小。
 
 ---
 
@@ -1276,7 +1278,7 @@ B 会逻辑上广播为：
 
 ---
 
-## 19.1 Broadcasting 基本规则
+## Broadcasting 基本规则
 
 从右向左比较维度。
 
@@ -1368,8 +1370,7 @@ valid_ratios
 
 意思可以理解为：
 
-> 每一个 query/reference point 都需要针对多个 feature levels
-> 得到相应坐标。
+> 每一个 query/reference point 都需要针对多个 feature levels 得到相应坐标。
 
 后面第 7 课会真正进入这类代码。
 
@@ -1377,7 +1378,7 @@ valid_ratios
 
 # 21. `cat()`：沿已有维度拼接
 
-这是多尺度检测极常见的操作。
+这是多尺度检测中常见的操作。
 
 假设：
 
@@ -1454,8 +1455,7 @@ B = [2,1600,128]
 
 这也是为什么 HybridEncoder 常需要 input projection：
 
-> 不同 Backbone feature channels 先投影到统一 hidden
-> dimension，再方便后续融合。
+> 不同 Backbone feature channels 先投影到统一 hidden dimension，再方便后续融合。
 
 ---
 
@@ -1659,9 +1659,7 @@ p3 = p3.reshape(B, 256, 80, 80)
 ```text
 Feature Map
 [B,C,H,W]
-
       ↕ 可逆的 shape organization
-
 Tokens
 [B,HW,C]
 ```
@@ -1928,9 +1926,7 @@ print(y.stride())
 x = x.permute(...)
 ```
 
-得到非连续 Tensor，
-
-直接：
+得到非连续 Tensor，直接：
 
 ```python
 x.view(...)
@@ -2889,7 +2885,7 @@ q, k, v = qkv.unbind(0)
 
 不要运行 Python，先在纸上完成。
 
-## Q1
+Q1
 
 ```python
 x = torch.randn(4, 256, 80, 80)
@@ -2900,7 +2896,7 @@ y = x.flatten(2)
 
 ---
 
-## Q2
+Q2
 
 接着：
 
@@ -2912,7 +2908,7 @@ z = y.transpose(1, 2)
 
 ---
 
-## Q3
+Q3
 
 ```python
 x = torch.randn(2, 1600, 768)
@@ -2930,7 +2926,7 @@ x = x.reshape(
 
 ---
 
-## Q4
+Q4
 
 ```text
 Q = [2,8,300,32]
@@ -2941,7 +2937,7 @@ K = [2,8,300,32]
 
 ---
 
-## Q5
+Q5
 
 ```text
 P3 = [2,6400,256]
@@ -2953,7 +2949,7 @@ P5 = [2,400,256]
 
 ---
 
-## Q6
+Q6
 
 三个：
 
@@ -2965,7 +2961,7 @@ Tensor 沿新的 dim=0 stack 后是什么？
 
 ---
 
-## Q7
+Q7
 
 ```text
 A = [2,300,1,2]
@@ -2976,7 +2972,7 @@ B = [2,1,3,2]
 
 ---
 
-## Q8
+Q8
 
 为什么：
 
@@ -2988,13 +2984,13 @@ x.permute(...).view(...)
 
 ---
 
-## Q9
+Q9
 
 `expand()` 与 `repeat()` 最重要的区别是什么？
 
 ---
 
-## Q10
+Q10
 
 下面两个数字的语义为什么不同？
 
@@ -3125,8 +3121,6 @@ P5 starts after 6400+1600 = 8000
 ---
 
 # 52. 课后作业 C：手写 QKV Shape Pipeline
-
-禁止直接复制本课代码。
 
 自己写：
 
@@ -3391,9 +3385,7 @@ https://github.com/Intellindust-AI-Lab/DEIMv2
 
 https://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/engine/backbone/vit_tiny.py
 
-后续正式进入 DINOv3/STA、HybridEncoder、DEIMTransformer
-时，会继续以官方当前源码为准核对，而不是只根据通用 ViT/DETR
-教程推测实现。
+后续正式进入 DINOv3/STA、HybridEncoder、DEIMTransformer 时，会继续以官方当前源码为准核对，而不是只根据通用 ViT/DETR 教程推测实现。
 
 ---
 
@@ -3401,9 +3393,6 @@ https://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/engine/backbone/vit_tiny
 
 这一课真正的达标标准不是记住 API，而是：
 
-> 给你一段 DEIMv2 Tensor
-> 代码，你能够不运行程序，先在纸上准确写出每一步的
-> shape，并说明每个维度代表什么。
+> 给你一段 DEIMv2 Tensor 代码，你能够不运行程序，先在纸上准确写出每一步的 shape，并说明每个维度代表什么。
 
-如果做到这一点，后面的 CNN、Attention、DETR、D-FINE、STA 和 Deformable
-Attention 会明显容易很多。
+如果做到这一点，后面的 CNN、Attention、DETR、D-FINE、STA 和 Deformable Attention 会明显容易很多。
