@@ -69,7 +69,9 @@ torch.Size([])
 
 数学上：
 
-\[ x=5 \]
+$$
+x=5
+$$
 
 ---
 
@@ -114,7 +116,9 @@ shape：
 
 数学上：
 
-\[ X`\in`{=tex}`\mathbb{R}`{=tex}\^{3`\times4`{=tex}} \]
+$$
+X\in\mathbb{R}^{3\times4}
+$$
 
 ---
 
@@ -333,7 +337,9 @@ z = x.reshape(2, 3, 4)
 
 所以：
 
-\[ 24=2`\times12`{=tex}=2`\times3`{=tex}`\times4`{=tex} \]
+$$
+24=2\times12=2\times3\times4
+$$
 
 ---
 
@@ -345,7 +351,9 @@ x = torch.randn(2, 3, 4)
 
 元素总数：
 
-\[ 2`\times3`{=tex}`\times4`{=tex}=24 \]
+$$
+2\times3\times4=24
+$$
 
 执行：
 
@@ -355,7 +363,9 @@ y = x.reshape(2, -1)
 
 PyTorch 自动求：
 
-\[ 24/2=12 \]
+$$
+24/2=12
+$$
 
 所以：
 
@@ -377,7 +387,9 @@ y = x.reshape(-1, 4)
 
 因为：
 
-\[ 24/4=6 \]
+$$
+24/4=6
+$$
 
 注意：
 
@@ -473,7 +485,9 @@ y = x.flatten(2)
 
 因为：
 
-\[ 80`\times80`{=tex}=6400 \]
+$$
+80\times80=6400
+$$
 
 ---
 
@@ -529,11 +543,15 @@ x = x.transpose(1, 2)
 
 这条转换请记住：
 
-\[ `\boxed{ BCHW \rightarrow BNC }`{=tex} \]
+$$
+\boxed{ BCHW \rightarrow BNC }
+$$
 
 其中：
 
-\[ N=H`\times `{=tex}W \]
+$$
+N=H\times W
+$$
 
 ---
 
@@ -574,7 +592,9 @@ self.proj = nn.Conv2d(
 
 因为：
 
-\[ 640/16=40 \]
+$$
+640/16=40
+$$
 
 接着：
 
@@ -590,7 +610,9 @@ self.proj = nn.Conv2d(
 
 因为：
 
-\[ 40`\times40`{=tex}=1600 \]
+$$
+40\times40=1600
+$$
 
 然后：
 
@@ -760,7 +782,9 @@ num_heads = 8
 
 则：
 
-\[ head_dim=256/8=32 \]
+$$
+head_dim=256/8=32
+$$
 
 ---
 
@@ -793,7 +817,9 @@ self.qkv = nn.Linear(C, C * 3)
 
 为什么 768？
 
-\[ 768=3`\times256`{=tex} \]
+$$
+768=3\times256
+$$
 
 因为一次生成：
 
@@ -827,7 +853,9 @@ V
 
 检查元素：
 
-\[ 3`\times8`{=tex}`\times32`{=tex} = 768 \]
+$$
+3\times8\times32 = 768
+$$
 
 完全一致。
 
@@ -1023,7 +1051,9 @@ shape：
 
 因为：
 
-\[ C=h`\times `{=tex}d \]
+$$
+C=h\times d
+$$
 
 以后看到：
 
@@ -1031,7 +1061,7 @@ shape：
 [B,8,1600,32]
 ```
 
-应该立即知道： 
+应该立即知道：
 
 ```text
 8 × 32 = 256
@@ -2223,7 +2253,9 @@ print(memory.shape)
 
 数学：
 
-\[ N = 80^2+40^2+20\^2 = 6400+1600+400 = 8400 \]
+$$
+N = 80^2+40^2+20^2 = 6400+1600+400 = 8400
+$$
 
 ---
 
@@ -2292,11 +2324,15 @@ attention scores:
 
 请自己验证：
 
-\[ 32=256/8 \]
+$$
+32=256/8
+$$
 
 以及：
 
-\[ \[300,32\]`\times[32,300]`{=tex}= \[300,300\] \]
+$$
+[300,32] \times [32,300] = [300,300]
+$$
 
 ---
 
@@ -2633,7 +2669,9 @@ x = x + attention(x)
 
 reshape 前后：
 
-\[ `\prod `{=tex}shape\_{before} = `\prod `{=tex}shape\_{after} \]
+$$
+\prod shape_{before} = \prod shape_{after}
+$$
 
 例如：
 
@@ -2649,7 +2687,9 @@ reshape 前后：
 
 因为：
 
-\[ 768=3`\times8`{=tex}`\times32`{=tex} \]
+$$
+768=3\times8\times32
+$$
 
 ---
 
@@ -3057,7 +3097,9 @@ N_total
 
 原因：
 
-\[ (H/2)(W/2)=HW/4 \]
+$$
+(H/2)(W/2)=HW/4
+$$
 
 这会直接影响后面计算量。
 
@@ -3337,8 +3379,10 @@ expand
 
 会从零推导：
 
-\[ H\_{out} = `\left`{=tex}`\lfloor`{=tex}
-`\frac{H+2P-D(K-1)-1}{S}`{=tex}+1 `\right`{=tex}`\rfloor`{=tex} \]
+$$
+H_{out} = \left\lfloor
+\frac{H+2P-D(K-1)-1}{S}+1 \right\rfloor
+$$
 
 并亲手计算：
 

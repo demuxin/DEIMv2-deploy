@@ -88,12 +88,12 @@ q71 ↔ GT5   IoU = 0.00
 
 因为 Hungarian Matching 求的是：
 
-\[
+$$
 \sigma^*
 =
 \arg\min_{\sigma}
 \sum_i C_{i,\sigma(i)}
-\]
+$$
 
 它要求的是：
 
@@ -109,13 +109,13 @@ q71 ↔ GT5   IoU = 0.00
 
 因此：
 
-\[
+$$
 \boxed{
 \text{Hungarian matched}
 \not\Rightarrow
 \text{high IoU}
 }
-\]
+$$
 
 ---
 
@@ -127,9 +127,9 @@ q71 ↔ GT5   IoU = 0.00
 
 DEIM 中 MAL 使用匹配后的预测框与 GT 框之间的 IoU：
 
-\[
+$$
 q=\operatorname{IoU}(\hat b,b)
-\]
+$$
 
 作为 localization / matching quality 信号。
 
@@ -173,38 +173,38 @@ target = t
 
 Binary Cross Entropy：
 
-\[
+$$
 L_{\text{BCE}}
 =
 -[
 t\log p
 +(1-t)\log(1-p)
 ]
-\]
+$$
 
 如果：
 
-\[
+$$
 t=1
-\]
+$$
 
 则：
 
-\[
+$$
 L=-\log p
-\]
+$$
 
 如果：
 
-\[
+$$
 t=0
-\]
+$$
 
 则：
 
-\[
+$$
 L=-\log(1-p)
-\]
+$$
 
 ---
 
@@ -278,11 +278,11 @@ Focal Loss 的核心思想：
 
 二分类直觉形式：
 
-\[
+$$
 FL(p_t)
 =
 -\alpha_t(1-p_t)^\gamma\log p_t
-\]
+$$
 
 当样本已经非常容易：
 
@@ -292,9 +292,9 @@ p_t → 1
 
 则：
 
-\[
+$$
 (1-p_t)^\gamma\rightarrow0
-\]
+$$
 
 loss 被抑制。
 
@@ -341,15 +341,15 @@ B 的 box 很差
 
 对 matched positive：
 
-\[
+$$
 q=\operatorname{IoU}(\hat b,b)
-\]
+$$
 
 并令 classification soft target：
 
-\[
+$$
 t=q
-\]
+$$
 
 因此：
 
@@ -367,25 +367,25 @@ IoU = 0.05 → target score = 0.05
 
 对 positive：
 
-\[
+$$
 L_{\text{VFL}}^+
 =
 -q[
 q\log p
 +(1-q)\log(1-p)
 ]
-\]
+$$
 
 你应该立刻看出它其实是：
 
-\[
+$$
 \boxed{
 L_{\text{VFL}}^+
 =
 q\cdot
 \operatorname{BCE}(p,q)
 }
-\]
+$$
 
 即：
 
@@ -405,19 +405,19 @@ target = q
 
 假设：
 
-\[
+$$
 q=0.05
-\]
+$$
 
 那么：
 
-\[
+$$
 L_{\text{VFL}}^+
 =
 0.05
 \cdot
 \operatorname{BCE}(p,0.05)
-\]
+$$
 
 整个 loss 被：
 
@@ -453,9 +453,9 @@ VFL:
 
 如果一个 Hungarian matched Query 与 GT：
 
-\[
+$$
 q=0
-\]
+$$
 
 那么 VFL 的 quality target 是：
 
@@ -517,11 +517,11 @@ MAL 可以用与官方源码完全一致的 BCE 形式写成：
 
 ### Positive：\(y=1\)
 
-\[
+$$
 t=q^\gamma
-\]
+$$
 
-\[
+$$
 \boxed{
 L_{\text{MAL}}^+
 =
@@ -530,27 +530,27 @@ q^\gamma\log p
 +(1-q^\gamma)\log(1-p)
 ]
 }
-\]
+$$
 
 即：
 
-\[
+$$
 \boxed{
 L_{\text{MAL}}^+
 =
 \operatorname{BCE}(p,q^\gamma)
 }
-\]
+$$
 
 ### Negative：\(y=0\)
 
-\[
+$$
 \boxed{
 L_{\text{MAL}}^-
 =
 -p^\gamma\log(1-p)
 }
-\]
+$$
 
 当前 DEIM 源码还允许通过 `mal_alpha` 对 negative weight 再乘一个可选系数。
 
@@ -560,9 +560,9 @@ L_{\text{MAL}}^-
 
 你可能在论文文本抽取或网页转录中看到 positive 公式第二项写成：
 
-\[
+$$
 +(1-q^\gamma)\log(1-p)
-\]
+$$
 
 容易造成符号困惑。
 
@@ -578,17 +578,17 @@ F.binary_cross_entropy_with_logits(
 
 因此 positive 的实际优化目标就是标准 BCE：
 
-\[
+$$
 -[
 t\log p+(1-t)\log(1-p)
 ]
-\]
+$$
 
 其中：
 
-\[
+$$
 t=q^\gamma
-\]
+$$
 
 **读论文公式时遇到排版/文本抽取歧义，最终一定回到官方实现验证。**
 
@@ -598,19 +598,19 @@ t=q^\gamma
 
 ## VFL positive
 
-\[
+$$
 L^+_{\text{VFL}}
 =
 q\cdot\operatorname{BCE}(p,q)
-\]
+$$
 
 ## MAL positive
 
-\[
+$$
 L^+_{\text{MAL}}
 =
 \operatorname{BCE}(p,q^\gamma)
-\]
+$$
 
 所以有两个变化：
 
@@ -639,9 +639,9 @@ DEIMCriterion:
 
 因此：
 
-\[
+$$
 t=q^{1.5}
-\]
+$$
 
 具体：
 
@@ -658,15 +658,15 @@ t=q^{1.5}
 
 当：
 
-\[
+$$
 0<q<1,\quad\gamma>1
-\]
+$$
 
 有：
 
-\[
+$$
 q^\gamma<q
-\]
+$$
 
 所以 MAL 的 target score 比原始 IoU 更“严格”。
 
@@ -711,33 +711,33 @@ MAL 没有把整个 matched-positive BCE 再乘一个很小的 `q`。
 
 对 BCEWithLogits：
 
-\[
+$$
 \frac{\partial L}{\partial z}
 =
 p-t
-\]
+$$
 
 其中：
 
-\[
+$$
 p=\sigma(z)
-\]
+$$
 
 对 MAL positive：
 
-\[
+$$
 t=q^\gamma
-\]
+$$
 
 所以：
 
-\[
+$$
 \boxed{
 \frac{\partial L_{\text{MAL}}^+}{\partial z}
 =
 p-q^\gamma
 }
-\]
+$$
 
 ---
 
@@ -745,21 +745,21 @@ p-q^\gamma
 
 因为：
 
-\[
+$$
 L_{\text{VFL}}^+
 =
 q\cdot\operatorname{BCE}(p,q)
-\]
+$$
 
 且源码中的 \(q\) 被 detach，可视为常量：
 
-\[
+$$
 \boxed{
 \frac{\partial L_{\text{VFL}}^+}{\partial z}
 =
 q(p-q)
 }
-\]
+$$
 
 这就是最漂亮的对比。
 
@@ -769,41 +769,41 @@ q(p-q)
 
 假设：
 
-\[
+$$
 q=0.05,\quad p=0.5,\quad\gamma=1.5
-\]
+$$
 
 MAL target：
 
-\[
+$$
 q^{1.5}\approx0.0112
-\]
+$$
 
 MAL：
 
-\[
+$$
 \frac{\partial L}{\partial z}
 \approx
 0.5-0.0112
 =
 0.4888
-\]
+$$
 
 VFL：
 
-\[
+$$
 \frac{\partial L}{\partial z}
 =
 0.05(0.5-0.05)
 =
 0.0225
-\]
+$$
 
 梯度绝对值相差约：
 
-\[
+$$
 21.7\times
-\]
+$$
 
 这非常直观地说明：
 
@@ -815,15 +815,15 @@ VFL：
 
 对：
 
-\[
+$$
 q=0.05
-\]
+$$
 
 MAL target：
 
-\[
+$$
 q^{1.5}\approx0.011
-\]
+$$
 
 也就是说它并没有说：
 
@@ -861,15 +861,15 @@ blindly boost low-quality score
 
 如果：
 
-\[
+$$
 q=0
-\]
+$$
 
 matched positive 的 MAL target：
 
-\[
+$$
 t=0^\gamma=0
-\]
+$$
 
 positive weight 仍为：
 
@@ -879,9 +879,9 @@ positive weight 仍为：
 
 所以：
 
-\[
+$$
 L=-\log(1-p)
-\]
+$$
 
 如果当前 Query 对 GT 类别错误地给出很高分：
 
@@ -905,13 +905,13 @@ q = 0
 
 假设：
 
-\[
+$$
 q=0.95,\quad\gamma=1.5
-\]
+$$
 
-\[
+$$
 q^{1.5}\approx0.926
-\]
+$$
 
 所以 MAL target 仍很高：
 
@@ -1025,18 +1025,18 @@ assert 'pred_boxes' in outputs
 
 因为 MAL 的 target：
 
-\[
+$$
 q^\gamma
-\]
+$$
 
 中：
 
-\[
+$$
 q=\operatorname{IoU}(
 \text{pred box},
 \text{GT box}
 )
-\]
+$$
 
 所以 MAL 不是纯粹只看 logits 的 classification loss。
 
@@ -1189,13 +1189,13 @@ target_boxes[k]
 
 所以真正需要：
 
-\[
+$$
 \operatorname{IoU}
 (
 \hat b_k,
 b_k
 )
-\]
+$$
 
 即矩阵主对角线。
 
@@ -1656,21 +1656,21 @@ target = 1
 
 所以：
 
-\[
+$$
 w
 =
 p^\gamma(1-1)+1
 =
 1
-\]
+$$
 
 因此：
 
-\[
+$$
 \boxed{
 w_{\text{positive}}=1
 }
-\]
+$$
 
 这就是 MAL 与 VFL 的关键差别。
 
@@ -1686,21 +1686,21 @@ target = 0
 
 所以：
 
-\[
+$$
 w
 =
 p^\gamma(1-0)+0
 =
 p^\gamma
-\]
+$$
 
 因此：
 
-\[
+$$
 \boxed{
 w_{\text{negative}}=p^\gamma
 }
-\]
+$$
 
 easy negative：
 
@@ -1821,11 +1821,11 @@ Q / num_boxes
 
 因为：
 
-\[
+$$
 \operatorname{mean}_Q(\cdot)\times Q
 =
 \operatorname{sum}_Q(\cdot)
-\]
+$$
 
 所以整体可理解为：
 
@@ -1969,11 +1969,11 @@ positive weight = 1
 
 所以：
 
-\[
+$$
 \boxed{
 \text{Dense O2O + MAL}
 }
-\]
+$$
 
 应当作为一个整体理解。
 
@@ -2100,9 +2100,9 @@ box regression gradient
 
 negative weight：
 
-\[
+$$
 p^\gamma
-\]
+$$
 
 是用当前预测 confidence 衡量：
 
@@ -2316,7 +2316,7 @@ DEIMCriterion:
 
 所以主损失可以概念化为：
 
-\[
+$$
 L
 =
 1L_{\text{MAL}}
@@ -2329,7 +2329,7 @@ L
 +
 1.5L_{\text{DDF}}
 +\cdots
-\]
+$$
 
 `...` 表示 auxiliary / encoder / DN 等分支中相应加权项。
 
@@ -2347,15 +2347,15 @@ gamma
 
 ### Positive target
 
-\[
+$$
 q^\gamma
-\]
+$$
 
 ### Negative weight
 
-\[
+$$
 p^\gamma
-\]
+$$
 
 因此调 gamma 同时改变：
 
@@ -2377,15 +2377,15 @@ negative focusing strength
 
 对：
 
-\[
+$$
 0<q<1
-\]
+$$
 
 gamma 越大：
 
-\[
+$$
 q^\gamma
-\]
+$$
 
 越小。
 
@@ -2400,9 +2400,9 @@ gamma=3.0 → 0.125
 
 同时 negative：
 
-\[
+$$
 p^\gamma
-\]
+$$
 
 对低 p 的抑制也更强。
 
@@ -2422,9 +2422,9 @@ negative focusing
 
 纯数学上：
 
-\[
+$$
 q^0=1
-\]
+$$
 
 对正样本会退化成：
 
@@ -2434,9 +2434,9 @@ hard target = 1
 
 negative weight：
 
-\[
+$$
 p^0=1
-\]
+$$
 
 于是接近普通 BCE。
 
@@ -2456,15 +2456,15 @@ p^0=1
 
 Positive：
 
-\[
+$$
 q^\gamma=q
-\]
+$$
 
 Negative：
 
-\[
+$$
 p^\gamma=p
-\]
+$$
 
 此时 MAL positive target 与 VFL 相同：
 
@@ -2557,9 +2557,9 @@ print(
 
 `logit=0` 对应：
 
-\[
+$$
 p=0.5
-\]
+$$
 
 这是观察两种 loss weighting 差异最方便的起点。
 
@@ -2637,11 +2637,11 @@ q = 0.20
 
 对 MAL positive：
 
-\[
+$$
 \frac{\partial L}{\partial z}
 =
 p-q^\gamma
-\]
+$$
 
 可以验证：
 
@@ -3296,7 +3296,7 @@ negatives
 
 Matcher：
 
-\[
+$$
 C
 =
 \lambda_{cls}C_{cls}
@@ -3304,7 +3304,7 @@ C
 \lambda_{bbox}C_{bbox}
 +
 \lambda_{giou}C_{giou}
-\]
+$$
 
 MAL：
 
@@ -3399,21 +3399,21 @@ detach
 
 所以：
 
-\[
+$$
 \frac{\partial L_{\text{MAL}}}
 {\partial \text{pred\_boxes}}
 =0
-\]
+$$
 
 （只考虑 MAL 这条路径）
 
 而：
 
-\[
+$$
 \frac{\partial L_{\text{MAL}}}
 {\partial \text{pred\_logits}}
 \neq0
-\]
+$$
 
 因此它严格属于 classification objective。
 
@@ -3510,56 +3510,56 @@ Dense O2O + MAL
 
 ## IoU quality
 
-\[
+$$
 q=\operatorname{IoU}(\hat b,b)
-\]
+$$
 
 ## VFL positive
 
-\[
+$$
 L_{\text{VFL}}^+
 =
 q\cdot\operatorname{BCE}(p,q)
-\]
+$$
 
 ## MAL positive target
 
-\[
+$$
 t=q^\gamma
-\]
+$$
 
 ## MAL positive
 
-\[
+$$
 L_{\text{MAL}}^+
 =
 \operatorname{BCE}(p,q^\gamma)
-\]
+$$
 
 ## MAL negative
 
-\[
+$$
 L_{\text{MAL}}^-
 =
 p^\gamma
 \operatorname{BCE}(p,0)
-\]
+$$
 
 ## MAL positive logit gradient
 
-\[
+$$
 \frac{\partial L}{\partial z}
 =
 p-q^\gamma
-\]
+$$
 
 ## VFL positive logit gradient
 
-\[
+$$
 \frac{\partial L}{\partial z}
 =
 q(p-q)
-\]
+$$
 
 ---
 
@@ -3844,9 +3844,9 @@ q=0 的 match 会按 negative-like quality 处理
 
 MAL 将 positive quality target 改为：
 
-\[
+$$
 q^\gamma
-\]
+$$
 
 并调整正负样本 weighting。
 

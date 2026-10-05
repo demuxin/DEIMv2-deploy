@@ -19,13 +19,13 @@
 > FiftyOne 可视化工具；官方还特别提示 TensorRT FP16 推荐使用 **≥
 > 10.6**。
 
-------------------------------------------------------------------------
+---
 
 ## 0. 本课最终要回答什么？
 
 学完以后，你应该能够独立回答：
 
-``` text
+```text
 checkpoint 里到底是什么？
 为什么推理不需要 matcher 和 criterion？
 为什么 model.forward() 的输出还不是最终检测结果？
@@ -49,7 +49,7 @@ TensorRT engine 为什么与环境相关？
 
 本课的目标不是"会执行几个工具命令"，而是形成：
 
-``` text
+```text
 训练
 ↓
 评估
@@ -71,7 +71,7 @@ TensorRT engine 为什么与环境相关？
 
 的完整研究与工程闭环。
 
-------------------------------------------------------------------------
+---
 
 # 第一部分：训练结束后到底得到了什么？
 
@@ -79,7 +79,7 @@ TensorRT engine 为什么与环境相关？
 
 训练后常见：
 
-``` text
+```text
 last.pth
 checkpointXXXX.pth
 best_stg1.pth
@@ -91,7 +91,7 @@ TensorBoard logs
 
 其中：
 
-``` text
+```text
 last.pth
 → 最后训练状态
 
@@ -107,20 +107,20 @@ eval/
 
 部署时不要机械选择 `last.pth`，而应明确：
 
-``` text
+```text
 哪个 checkpoint？
 对应哪个 config？
 对应哪个 commit？
 validation AP 是多少？
 ```
 
-------------------------------------------------------------------------
+---
 
 ## 2. Training checkpoint 不等于部署模型
 
 完整 checkpoint 可能包含：
 
-``` text
+```text
 model
 EMA
 optimizer
@@ -132,13 +132,13 @@ last_epoch
 
 部署通常只关心：
 
-``` text
+```text
 inference model parameters
 ```
 
 因此概念上是：
 
-``` text
+```text
 training checkpoint
         ↓
 选择 raw / EMA weights
@@ -150,13 +150,13 @@ deploy()
 export
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第二部分：PyTorch 推理完整链条
 
 官方当前提供类似：
 
-``` bash
+```bash
 python tools/inference/torch_inf.py \
   -c configs/deimv2/deimv2_dinov3_x_coco.yml \
   -r model.pth \
@@ -166,7 +166,7 @@ python tools/inference/torch_inf.py \
 
 完整流程：
 
-``` text
+```text
 JPEG / Video Frame
         ↓
 decode
@@ -196,7 +196,7 @@ scores + labels + pixel boxes
 threshold / visualization
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三部分：推理预处理必须和训练/验证对齐
 
@@ -204,7 +204,7 @@ threshold / visualization
 
 训练验证：
 
-``` text
+```text
 RGB
 Resize
 scale to [0,1]
@@ -214,7 +214,7 @@ CHW
 
 部署却：
 
-``` text
+```text
 OpenCV BGR
 直接 /255
 没有 mean/std
@@ -224,7 +224,7 @@ OpenCV BGR
 
 必须核对：
 
-``` text
+```text
 RGB / BGR
 input H,W
 resize strategy
@@ -240,11 +240,13 @@ batch dimension
 
 Normalize：
 
-\[ x'\_c=`\frac{x_c-\mu_c}{\sigma_c}`{=tex} \]
+$$
+x'_c=\frac{x_c-\mu_c}{\sigma_c}
+$$
 
 具体 `mean/std` 必须以当前 config 为准。
 
-------------------------------------------------------------------------
+---
 
 # 第四部分：`eval()`、`no_grad()`、`deploy()` 不一样
 
@@ -252,7 +254,7 @@ Normalize：
 
 改变：
 
-``` text
+```text
 Dropout
 BatchNorm
 self.training-dependent branches
@@ -264,7 +266,7 @@ self.training-dependent branches
 
 关闭梯度图：
 
-``` python
+```python
 model.eval()
 
 with torch.inference_mode():
@@ -275,7 +277,7 @@ with torch.inference_mode():
 
 DEIM 顶层的思路是：
 
-``` python
+```python
 self.eval()
 
 for m in self.modules():
@@ -285,7 +287,7 @@ for m in self.modules():
 
 因此：
 
-``` text
+```text
 eval()
 ≠
 deploy()
@@ -293,7 +295,7 @@ deploy()
 
 `convert_to_deploy()` 可能执行：
 
-``` text
+```text
 训练态结构 → 推理态结构
 Conv/BN 等重参数化
 缓存固定量
@@ -302,13 +304,13 @@ Conv/BN 等重参数化
 
 具体以当前模块实现为准。
 
-------------------------------------------------------------------------
+---
 
 # 第五部分：为什么推理不需要 Matcher / Criterion / DN？
 
 训练：
 
-``` text
+```text
 prediction
 ↓
 Hungarian matching
@@ -324,7 +326,7 @@ backward
 
 推理：
 
-``` text
+```text
 prediction
 ↓
 PostProcessor
@@ -334,7 +336,7 @@ detections
 
 推理没有 GT，因此：
 
-``` text
+```text
 不需要 HungarianMatcher
 不需要 Criterion
 不需要 loss
@@ -344,20 +346,20 @@ detections
 
 这是训练图与部署图的重要差异。
 
-------------------------------------------------------------------------
+---
 
 # 第六部分：模型原始输出
 
 主检测分支概念上：
 
-``` text
+```text
 pred_logits [B,Q,C]
 pred_boxes  [B,Q,4]
 ```
 
 以常见 X / COCO：
 
-``` text
+```text
 B = 1
 Q = 300
 C = 80
@@ -365,36 +367,44 @@ C = 80
 
 则：
 
-``` text
+```text
 pred_logits [1,300,80]
 pred_boxes  [1,300,4]
 ```
 
 `pred_boxes` 通常还是：
 
-``` text
+```text
 normalized cxcywh
 ```
 
 并不是最终像素框。
 
-------------------------------------------------------------------------
+---
 
 # 第七部分：PostProcessor------从模型输出到检测结果
 
 ## 7. cxcywh → xyxy
 
-\[ x_1=c_x-`\frac{w}{2}`{=tex} \]
+$$
+x_1=c_x-\frac{w}{2}
+$$
 
-\[ y_1=c_y-`\frac{h}{2}`{=tex} \]
+$$
+y_1=c_y-\frac{h}{2}
+$$
 
-\[ x_2=c_x+`\frac{w}{2}`{=tex} \]
+$$
+x_2=c_x+\frac{w}{2}
+$$
 
-\[ y_2=c_y+`\frac{h}{2}`{=tex} \]
+$$
+y_2=c_y+\frac{h}{2}
+$$
 
 例如：
 
-``` text
+```text
 [cx,cy,w,h]
 =
 [0.50,0.40,0.20,0.10]
@@ -402,32 +412,36 @@ normalized cxcywh
 
 得到：
 
-``` text
+```text
 [x1,y1,x2,y2]
 =
 [0.40,0.35,0.60,0.45]
 ```
 
-------------------------------------------------------------------------
+---
 
 ## 8. normalized → pixel
 
 原图：
 
-``` text
+```text
 W=1920
 H=1080
 ```
 
 则：
 
-\[ x\_{pixel}=x\_{norm}W \]
+$$
+x_{pixel}=x_{norm}W
+$$
 
-\[ y\_{pixel}=y\_{norm}H \]
+$$
+y_{pixel}=y_{norm}H
+$$
 
 上面的框变成：
 
-``` text
+```text
 x1=768
 y1=378
 x2=1152
@@ -436,17 +450,17 @@ y2=486
 
 所以推理必须保留：
 
-``` text
+```text
 original image size
 ```
 
-------------------------------------------------------------------------
+---
 
 ## 9. Letterbox 时为什么更复杂？
 
 如果不是直接 resize，而是：
 
-``` text
+```text
 保持比例 resize
 +
 padding
@@ -454,7 +468,7 @@ padding
 
 恢复原图时必须逆变换：
 
-``` text
+```text
 减 padding
 ↓
 除 scale
@@ -464,17 +478,19 @@ clip to original image
 
 不能简单把 normalized box 乘原图宽高。
 
-------------------------------------------------------------------------
+---
 
 # 第八部分：分类 score 与 Top-K
 
 如果分类采用 sigmoid：
 
-\[ p\_{q,c}=`\sigma`{=tex}(z\_{q,c}) \]
+$$
+p_{q,c}=\sigma(z_{q,c})
+$$
 
 则：
 
-``` text
+```text
 Q=300
 C=80
 
@@ -484,11 +500,13 @@ score matrix
 
 总 query-class pair：
 
-\[ 300`\times80`{=tex}=24000 \]
+$$
+300\times80=24000
+$$
 
 flatten：
 
-``` text
+```text
 [24000]
 ```
 
@@ -496,42 +514,48 @@ flatten：
 
 若 flatten index：
 
-\[ i=qC+c \]
+$$
+i=qC+c
+$$
 
 则：
 
-\[ q=`\lfloor `{=tex}i/C`\rfloor`{=tex} \]
+$$
+q=\lfloor i/C\rfloor
+$$
 
-\[ c=i`\bmod `{=tex}C \]
+$$
+c=i\bmod C
+$$
 
 因此 top-k index 可以恢复：
 
-``` text
+```text
 query index
 class index
 ```
 
 再从 `pred_boxes[q]` 取对应框。
 
-------------------------------------------------------------------------
+---
 
 # 第九部分：Top-K 与 threshold 不是一回事
 
 Top-K：
 
-``` text
+```text
 只保留分数最高 K 个
 ```
 
 Threshold：
 
-``` text
+```text
 只保留 score >= t
 ```
 
 通常可以：
 
-``` text
+```text
 top-k
 ↓
 threshold
@@ -539,26 +563,26 @@ threshold
 
 改变 threshold 不是改变模型能力，而是改变：
 
-``` text
+```text
 precision / recall operating point
 ```
 
 通常：
 
-``` text
+```text
 threshold ↑
 → detection 数 ↓
 → precision 可能 ↑
 → recall 可能 ↓
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第十部分：为什么 DETR/DEIM 通常不需要 NMS？
 
 传统 dense detector：
 
-``` text
+```text
 一个 GT
 → 大量相邻 anchors/cells
 → 多个重复框
@@ -567,7 +591,7 @@ threshold ↑
 
 DETR：
 
-``` text
+```text
 set prediction
 +
 one-to-one matching
@@ -575,7 +599,7 @@ one-to-one matching
 
 目标是：
 
-``` text
+```text
 一个 GT
 ↔
 一个主要 query
@@ -588,45 +612,53 @@ one-to-one matching
 工程上仍可以加 NMS，但如果 O2O DETR 必须依赖强 NMS
 才能正常工作，应进一步检查：
 
-``` text
+```text
 训练
 score calibration
 postprocess
 deployment pipeline
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第十一部分：COCO Evaluation
 
 ## 10. IoU
 
-\[ IoU= `\frac{|B_p\cap B_g|}`{=tex} {\|B_p`\cup `{=tex}B_g\|} \]
+$$
+IoU= \frac{|B_p\cap B_g|} {\|B_p\cup B_g\|}
+$$
 
 例如：
 
-``` text
+```text
 intersection=6000
 union=10000
 ```
 
 则：
 
-\[ IoU=0.6 \]
+$$
+IoU=0.6
+$$
 
 在 IoU=0.5 时可能算 TP，在 IoU=0.75 时不满足。
 
-------------------------------------------------------------------------
+---
 
 ## 11. Precision / Recall
 
-\[ Precision=`\frac{TP}{TP+FP}`{=tex} \]
+$$
+Precision=\frac{TP}{TP+FP}
+$$
 
-\[ Recall=`\frac{TP}{TP+FN}`{=tex} \]
+$$
+Recall=\frac{TP}{TP+FN}
+$$
 
 score threshold 改变会产生不同 precision/recall 点。
 
-------------------------------------------------------------------------
+---
 
 ## 12. AP
 
@@ -634,7 +666,7 @@ AP 概括 Precision-Recall curve 的质量。
 
 COCO 主 AP 通常平均：
 
-``` text
+```text
 IoU 0.50
 0.55
 ...
@@ -643,11 +675,11 @@ IoU 0.50
 
 所以它比单独 AP50 更严格。
 
-------------------------------------------------------------------------
+---
 
 # 第十二部分：AP50 / AP75 / APS / APM / APL
 
-``` text
+```text
 AP50
 → 较宽松定位要求
 
@@ -666,21 +698,21 @@ APL
 
 如果：
 
-``` text
+```text
 AP50 很高
 AP75 明显低
 ```
 
 可能说明：
 
-``` text
+```text
 目标找到了
 但定位不够精细
 ```
 
 如果改 STA 后：
 
-``` text
+```text
 overall AP +0.2
 APS +1.1
 APL -0.1
@@ -688,13 +720,13 @@ APL -0.1
 
 这比只看 `+0.2 AP` 更能解释修改到底改变了什么。
 
-------------------------------------------------------------------------
+---
 
 # 第十三部分：为什么改模型后不能只看 AP？
 
 至少同时看：
 
-``` text
+```text
 AP
 AP50
 AP75
@@ -709,35 +741,39 @@ Peak Memory
 
 因为：
 
-``` text
+```text
 AP +0.3
 Latency +40%
 ```
 
 对实时检测器未必是更好方案。
 
-------------------------------------------------------------------------
+---
 
 # 第十四部分：Params
 
 总参数：
 
-\[ Params=`\sum`{=tex}\_i#`\theta`{=tex}\_i \]
+$$
+Params=\sum_i \#\theta_i
+$$
 
 Linear：
 
-``` text
+```text
 in=256
 out=256
 ```
 
 参数：
 
-\[ 256`\times256`{=tex}+256=65792 \]
+$$
+256\times256+256=65792
+$$
 
 Params 主要影响：
 
-``` text
+```text
 weight storage
 weight memory
 optimizer state
@@ -746,42 +782,44 @@ optimizer state
 
 但：
 
-``` text
+```text
 Params 少
 ≠
 一定更快
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第十五部分：MACs 与 FLOPs
 
 卷积 MACs 近似：
 
-\[ H_oW_oC_o `\left`{=tex}( `\frac{C_i}{groups}`{=tex}K_hK_w
-`\right`{=tex}) \]
+$$
+H_oW_oC_o \left( \frac{C_i}{groups}K_hK_w
+\right)
+$$
 
 不同工具可能：
 
-``` text
+```text
 1 MAC = 1 FLOP
 ```
 
 或：
 
-``` text
+```text
 1 MAC = 2 FLOPs
 ```
 
 比较论文数字时必须确认定义。
 
-------------------------------------------------------------------------
+---
 
 # 第十六部分：为什么 GFLOPs 不等于真实速度？
 
 真实 latency 还受：
 
-``` text
+```text
 memory access
 kernel fusion
 parallelism
@@ -797,21 +835,25 @@ attention implementation
 
 两个 50 GFLOPs 模型完全可能有明显不同 latency。
 
-------------------------------------------------------------------------
+---
 
 # 第十七部分：Latency 与 FPS
 
 若：
 
-\[ T=10ms \]
+$$
+T=10ms
+$$
 
 理论模型 FPS：
 
-\[ FPS=`\frac{1000}{10}`{=tex}=100 \]
+$$
+FPS=\frac{1000}{10}=100
+$$
 
 但真实应用还有：
 
-``` text
+```text
 decode
 preprocess
 H2D
@@ -824,18 +866,18 @@ I/O
 
 因此必须区分：
 
-``` text
+```text
 model-only latency
 end-to-end latency
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第十八部分：GPU Benchmark 必须 Warmup
 
 第一次运行可能包含：
 
-``` text
+```text
 CUDA context initialization
 memory allocation
 kernel loading
@@ -845,7 +887,7 @@ TensorRT tactic initialization
 
 正确 PyTorch timing 示例：
 
-``` python
+```python
 model.eval()
 
 with torch.inference_mode():
@@ -872,7 +914,7 @@ with torch.inference_mode():
         )
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第十九部分：为什么必须 `cuda.synchronize()`？
 
@@ -880,26 +922,26 @@ CUDA 默认异步。
 
 CPU 可能只是：
 
-``` text
+```text
 提交 kernel
 → 立即继续
 ```
 
 如果不同步，测到的可能主要是：
 
-``` text
+```text
 kernel launch time
 ```
 
 而不是完整 GPU 执行时间。
 
-------------------------------------------------------------------------
+---
 
 # 第二十部分：一个可信 Benchmark 应报告什么？
 
 至少：
 
-``` text
+```text
 GPU
 CPU
 CUDA
@@ -920,26 +962,26 @@ postprocess included?
 
 否则一句：
 
-``` text
+```text
 2.8 ms
 ```
 
 几乎不可复现。
 
-------------------------------------------------------------------------
+---
 
 # 第二十一部分：官方 Benchmark 工具
 
 当前官方 README 提供：
 
-``` bash
+```bash
 python tools/benchmark/get_info.py \
   -c configs/deimv2/deimv2_dinov3_x_coco.yml
 ```
 
 用于：
 
-``` text
+```text
 FLOPs
 MACs
 Params
@@ -947,7 +989,7 @@ Params
 
 以及：
 
-``` bash
+```bash
 python tools/benchmark/trt_benchmark.py \
   --COCO_dir path/to/COCO2017 \
   --engine_dir model.engine
@@ -957,7 +999,7 @@ python tools/benchmark/trt_benchmark.py \
 
 工具报错时不要直接认为模型有问题。逐层验证：
 
-``` text
+```text
 config create
 ↓
 model create
@@ -969,13 +1011,13 @@ dummy forward
 benchmark wrapper
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第二十二部分：ONNX 是什么？
 
 概念：
 
-``` text
+```text
 PyTorch Module
 ↓
 export
@@ -987,13 +1029,13 @@ ONNX Runtime / TensorRT / OpenVINO ...
 
 `.pth` 更接近：
 
-``` text
+```text
 parameters / training state
 ```
 
 `.onnx` 是：
 
-``` text
+```text
 operators
 +
 tensor graph
@@ -1005,13 +1047,13 @@ input/output metadata
 
 两者本质不同。
 
-------------------------------------------------------------------------
+---
 
 # 第二十三部分：官方 ONNX 导出
 
 当前官方 README：
 
-``` bash
+```bash
 pip install onnx onnxsim
 
 python tools/deployment/export_onnx.py \
@@ -1020,19 +1062,19 @@ python tools/deployment/export_onnx.py \
   -r model.pth
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第二十四部分：为什么 `--check` 很重要？
 
 文件导出成功只证明：
 
-``` text
+```text
 exporter 没立即失败
 ```
 
 不证明：
 
-``` text
+```text
 graph schema 正确
 runtime 可加载
 shape 正确
@@ -1043,13 +1085,13 @@ AP 一致
 
 所以 export 后必须做分层验证。
 
-------------------------------------------------------------------------
+---
 
 # 第二十五部分：部署 Wrapper
 
 导出脚本通常会构造一个 inference wrapper，把：
 
-``` text
+```text
 model
 +
 postprocessor
@@ -1059,14 +1101,14 @@ postprocessor
 
 部署图可能接受：
 
-``` text
+```text
 images
 orig_target_sizes
 ```
 
 直接输出：
 
-``` text
+```text
 labels
 boxes
 scores
@@ -1074,64 +1116,64 @@ scores
 
 具体 input/output names 与 shape 必须以当前 `export_onnx.py` 为准。
 
-------------------------------------------------------------------------
+---
 
 # 第二十六部分：PostProcessor 是否应该导入 ONNX？
 
 方案 A：
 
-``` text
+```text
 Model + PostProcessor
 全部导出
 ```
 
 优点：
 
-``` text
+```text
 部署端简单
 Python/C++ 后处理差异小
 ```
 
 缺点：
 
-``` text
+```text
 top-k/gather/shape ops 增加导出复杂度
 策略不易动态修改
 ```
 
 方案 B：
 
-``` text
+```text
 只导出 raw predictions
 PostProcessor 在 C++/CUDA 实现
 ```
 
 优点：
 
-``` text
+```text
 更灵活
 更容易针对产品优化
 ```
 
 缺点：
 
-``` text
+```text
 必须严格验证 Python/C++ parity
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第二十七部分：Static vs Dynamic Shape
 
 固定：
 
-``` text
+```text
 [1,3,640,640]
 ```
 
 优点：
 
-``` text
+```text
 TensorRT 更易优化
 memory planning 简单
 性能稳定
@@ -1139,13 +1181,13 @@ memory planning 简单
 
 动态：
 
-``` text
+```text
 [B,3,H,W]
 ```
 
 更灵活，但：
 
-``` text
+```text
 export
 optimization profile
 memory
@@ -1155,7 +1197,7 @@ operator behavior
 
 更复杂。
 
-------------------------------------------------------------------------
+---
 
 # 第二十八部分：为什么高分辨率导出会突然很重？
 
@@ -1163,48 +1205,50 @@ ViT patch size 16：
 
 640 输入：
 
-``` text
+```text
 40×40 = 1600 tokens
 ```
 
 2048 输入：
 
-``` text
+```text
 128×128 = 16384 tokens
 ```
 
 token 数比例：
 
-\[ 16384/1600=10.24 \]
+$$
+16384/1600=10.24
+$$
 
 如果某些操作复杂度随 token 数高阶增长，内存/计算压力会更剧烈。
 
 因此：
 
-``` text
+```text
 640 export 成功
 ```
 
 不能推断：
 
-``` text
+```text
 2048 只多占一点资源
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第二十九部分：ONNX Tracer Warning
 
 如果源码：
 
-``` python
+```python
 if tensor.shape[0] > 1:
     ...
 ```
 
 tracing 可能提示：
 
-``` text
+```text
 Tensor → Python boolean
 ```
 
@@ -1212,13 +1256,13 @@ Tensor → Python boolean
 
 所以 dynamic shape 比 static export 更难，需要实际多 shape 验证。
 
-------------------------------------------------------------------------
+---
 
 # 第三十部分：ONNX 验证金字塔
 
 ## Level 1：Graph Check
 
-``` python
+```python
 import onnx
 
 m = onnx.load("model.onnx")
@@ -1231,7 +1275,7 @@ onnx.checker.check_model(m)
 
 核对：
 
-``` text
+```text
 input names
 input shape
 dtype
@@ -1243,7 +1287,7 @@ output shape
 
 同一输入：
 
-``` text
+```text
 PyTorch
 vs
 ONNX Runtime
@@ -1251,17 +1295,21 @@ ONNX Runtime
 
 比较：
 
-\[ MAE= `\frac`{=tex}1N`\sum`{=tex}\_i\|y_i^{pt}-y_i^{onnx}\| \]
+$$
+MAE= \frac1N\sum_i\|y_i^{pt}-y_i^{onnx}\|
+$$
 
 以及：
 
-\[ MaxError= `\max`{=tex}\_i\|y_i^{pt}-y_i^{onnx}\| \]
+$$
+MaxError= \max_i\|y_i^{pt}-y_i^{onnx}\|
+$$
 
 ## Level 4：Detection Parity
 
 比较：
 
-``` text
+```text
 labels
 scores
 boxes
@@ -1279,7 +1327,7 @@ boxes
 
 达到部署要求。
 
-------------------------------------------------------------------------
+---
 
 # 第三十一部分：为什么只比较最终 box 不够？
 
@@ -1287,7 +1335,7 @@ top-k 是离散排序。
 
 两个 backend：
 
-``` text
+```text
 0.50001
 0.50000
 ```
@@ -1296,7 +1344,7 @@ top-k 是离散排序。
 
 因此最好同时比较：
 
-``` text
+```text
 raw logits
 raw boxes
 top-k indices
@@ -1304,13 +1352,13 @@ final detections
 full AP
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三十二部分：ONNX Runtime
 
 官方当前提供：
 
-``` bash
+```bash
 python tools/inference/onnx_inf.py \
   --onnx model.onnx \
   --input image.jpg
@@ -1320,14 +1368,14 @@ python tools/inference/onnx_inf.py \
 
 如果：
 
-``` text
+```text
 PyTorch 正确
 ONNX Runtime 错
 ```
 
 优先查：
 
-``` text
+```text
 export graph
 operator
 input shape
@@ -1337,13 +1385,13 @@ postprocess
 
 而不是先查 TensorRT。
 
-------------------------------------------------------------------------
+---
 
 # 第三十三部分：TensorRT
 
 概念：
 
-``` text
+```text
 ONNX
 ↓
 TensorRT Parser
@@ -1359,20 +1407,20 @@ Engine
 
 官方当前示例：
 
-``` bash
+```bash
 trtexec \
   --onnx="model.onnx" \
   --saveEngine="model.engine" \
   --fp16
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三十四部分：为什么 TensorRT Engine 环境相关？
 
 engine 与：
 
-``` text
+```text
 GPU architecture
 TensorRT version
 CUDA stack
@@ -1385,20 +1433,20 @@ builder settings
 
 更稳妥的生产方式：
 
-``` text
+```text
 保留 ONNX + build command + environment
 在目标机器/目标镜像构建 engine
 ```
 
 而不是把 `.engine` 当成完全通用模型文件。
 
-------------------------------------------------------------------------
+---
 
 # 第三十五部分：FP32 vs FP16
 
 FP16 通常：
 
-``` text
+```text
 weight/activation memory ↓
 bandwidth ↓
 Tensor Core utilization ↑
@@ -1409,25 +1457,25 @@ latency ↓
 
 所以：
 
-``` text
+```text
 engine 能运行
 ≠
 FP16 精度正确
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三十六部分：DEIMv2 当前 TensorRT 版本注意事项
 
 本课编写时，官方 README 明确提示：
 
-``` text
+```text
 TensorRT FP16 推荐 >= 10.6
 ```
 
 并指出：
 
-``` text
+```text
 TensorRT 10.4
 ```
 
@@ -1435,25 +1483,25 @@ TensorRT 10.4
 
 所以部署实验必须记录：
 
-``` text
+```text
 TensorRT exact version
 ```
 
 并做：
 
-``` text
+```text
 FP32 reference
 +
 FP16 parity
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三十七部分：TensorRT 推理
 
 官方当前提供：
 
-``` bash
+```bash
 python tools/inference/trt_inf.py \
   --trt model.engine \
   --input image.jpg
@@ -1461,7 +1509,7 @@ python tools/inference/trt_inf.py \
 
 生产系统还要处理：
 
-``` text
+```text
 CUDA stream
 input/output buffer
 H2D/D2H
@@ -1471,13 +1519,13 @@ batching
 video pipeline
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第三十八部分：部署显存由什么组成？
 
 不是只有 weights：
 
-``` text
+```text
 weights
 activations
 workspace
@@ -1489,51 +1537,51 @@ runtime allocations
 
 因此：
 
-``` text
+```text
 model file 200 MB
 ```
 
 不代表 GPU 只需要 200 MB。
 
-------------------------------------------------------------------------
+---
 
 # 第三十九部分：Batch Size 与实时性
 
 Batch=1：
 
-``` text
+```text
 低单帧 latency
 适合摄像头实时检测
 ```
 
 较大 batch：
 
-``` text
+```text
 throughput 可能更高
 单样本等待时间可能更长
 ```
 
 所以：
 
-``` text
+```text
 实时 streaming
 ```
 
 和：
 
-``` text
+```text
 离线批处理
 ```
 
 的最优 profile 不一样。
 
-------------------------------------------------------------------------
+---
 
 # 第四十部分：真实端到端 FPS
 
 假设：
 
-``` text
+```text
 decode      2.0 ms
 preprocess  1.0 ms
 H2D         0.5 ms
@@ -1544,23 +1592,29 @@ render      2.0 ms
 
 串行总计：
 
-\[ 12.2ms \]
+$$
+12.2ms
+$$
 
 端到端理论 FPS：
 
-\[ 1000/12.2`\approx81.97`{=tex} \]
+$$
+1000/12.2\approx81.97
+$$
 
 而不是只看模型：
 
-\[ 1000/6`\approx166.7`{=tex} \]
+$$
+1000/6\approx166.7
+$$
 
-------------------------------------------------------------------------
+---
 
 # 第四十一部分：Pipeline 并行
 
 可以设计：
 
-``` text
+```text
 CPU A:
 decode frame n+1
 
@@ -1573,25 +1627,25 @@ postprocess frame n-1
 
 因此：
 
-``` text
+```text
 throughput
 ```
 
 与：
 
-``` text
+```text
 单帧串行 latency
 ```
 
 也不是完全相同的指标。
 
-------------------------------------------------------------------------
+---
 
 # 第四十二部分：Visualization 是 Error Analysis 工具
 
 官方提供 FiftyOne：
 
-``` bash
+```bash
 python tools/visualization/fiftyone_vis.py \
   -c configs/deimv2/deimv2_dinov3_x_coco.yml \
   -r model.pth
@@ -1599,7 +1653,7 @@ python tools/visualization/fiftyone_vis.py \
 
 必须人工分类失败案例：
 
-``` text
+```text
 False Positive
 False Negative
 Class Confusion
@@ -1613,20 +1667,20 @@ Background Confusion
 Annotation Error
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第四十三部分：为什么 AP 不能替代错误分析？
 
 两个模型：
 
-``` text
+```text
 A: 55.0 AP
 B: 55.1 AP
 ```
 
 可能：
 
-``` text
+```text
 A 小目标强
 B 大目标强
 
@@ -1639,7 +1693,7 @@ B 低光差
 
 只有：
 
-``` text
+```text
 quantitative metrics
 +
 qualitative error analysis
@@ -1647,13 +1701,13 @@ qualitative error analysis
 
 结合，才能指导下一次修改。
 
-------------------------------------------------------------------------
+---
 
 # 第四十四部分：自定义数据集------从 COCO 80 类到 N 类
 
 至少检查：
 
-``` text
+```text
 COCO JSON
 category IDs
 class remapping
@@ -1667,13 +1721,13 @@ pretrained checkpoint mismatch
 
 不能只改：
 
-``` yaml
+```yaml
 num_classes: N
 ```
 
 就认为完成。
 
-------------------------------------------------------------------------
+---
 
 # 第四十五部分：COCO Category ID 的坑
 
@@ -1683,7 +1737,7 @@ COCO 原始 category ID 并不是简单连续的 0\~79。
 
 自定义数据集必须明确：
 
-``` text
+```text
 JSON category_id
 ↔
 continuous training label
@@ -1693,13 +1747,13 @@ display class name
 
 三者关系。
 
-------------------------------------------------------------------------
+---
 
 # 第四十六部分：自定义数据集训练前审计
 
 至少统计：
 
-``` text
+```text
 images
 annotations
 categories
@@ -1714,7 +1768,7 @@ image resolution
 
 Invalid box 检查：
 
-``` text
+```text
 w <= 0
 h <= 0
 x < 0
@@ -1725,13 +1779,13 @@ NaN
 Inf
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第四十七部分：Class Imbalance
 
 例如：
 
-``` text
+```text
 class A = 100000 boxes
 class B = 300 boxes
 ```
@@ -1740,19 +1794,19 @@ class B = 300 boxes
 
 应该同时看：
 
-``` text
+```text
 per-class AP
 class frequency
 confusion/error cases
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第四十八部分：修改模型的黄金原则
 
 每次改动必须先写：
 
-``` text
+```text
 1. 为什么改？
 2. 改哪个 tensor / module？
 3. 理论预期是什么？
@@ -1762,26 +1816,26 @@ confusion/error cases
 
 否则：
 
-``` text
+```text
 改代码
 → AP 变化
 ```
 
 不能形成可靠知识。
 
-------------------------------------------------------------------------
+---
 
 # 第四十九部分：实验 1------修改 `num_queries`
 
 例如：
 
-``` text
+```text
 300 → 200
 ```
 
 先预测：
 
-``` text
+```text
 query tensor ↓
 self-attention cost ↓
 decoder memory ↓
@@ -1791,25 +1845,33 @@ latency 可能 ↓
 
 Self-attention pair count：
 
-\[ O(Q\^2) \]
+$$
+O(Q^2)
+$$
 
 300：
 
-\[ 300\^2=90000 \]
+$$
+300^2=90000
+$$
 
 200：
 
-\[ 200\^2=40000 \]
+$$
+200^2=40000
+$$
 
 比例：
 
-\[ 40000/90000`\approx0.444`{=tex} \]
+$$
+40000/90000\approx0.444
+$$
 
 仅 query self-attention 的 pair count 理论下降约 55.6%。
 
 但整个模型 latency 不会下降 55.6%，因为：
 
-``` text
+```text
 DINOv3
 STA
 HybridEncoder
@@ -1819,13 +1881,13 @@ heads
 
 仍然存在。
 
-------------------------------------------------------------------------
+---
 
 # 第五十部分：`num_queries` Ablation
 
 建议：
 
-``` text
+```text
 Q=100
 Q=200
 Q=300
@@ -1834,7 +1896,7 @@ Q=500
 
 记录：
 
-``` text
+```text
 AP
 AP50
 AP75
@@ -1844,19 +1906,19 @@ peak memory
 crowded-scene recall
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第五十一部分：实验 2------Decoder Layers
 
 例如：
 
-``` text
+```text
 6 → 4
 ```
 
 预期：
 
-``` text
+```text
 decoder latency ↓
 memory ↓
 refinement stages ↓
@@ -1865,23 +1927,23 @@ AP 可能下降
 
 重点看：
 
-``` text
+```text
 AP75
 ```
 
 因为减少 refinement layer 可能首先影响精细定位。
 
-------------------------------------------------------------------------
+---
 
 # 第五十二部分：实验 3------冻结 DINOv3
 
-``` text
+```text
 requires_grad=False
 ```
 
 训练侧：
 
-``` text
+```text
 backward cost ↓
 optimizer states ↓
 training memory ↓
@@ -1890,26 +1952,26 @@ domain adaptation ability 可能 ↓
 
 推理侧：
 
-``` text
+```text
 Params 基本不变
 latency 基本不因 requires_grad 改变
 ```
 
 因为 inference 本来就不计算梯度。
 
-------------------------------------------------------------------------
+---
 
 # 第五十三部分：实验 4------STA Interaction Indexes
 
 例如 baseline：
 
-``` text
+```text
 [5,8,11]
 ```
 
 可比较：
 
-``` text
+```text
 [3,7,11]
 [4,8,11]
 [5,8,11]
@@ -1917,7 +1979,7 @@ latency 基本不因 requires_grad 改变
 
 它影响：
 
-``` text
+```text
 ViT feature depth
 semantic strength
 spatial detail
@@ -1929,7 +1991,7 @@ gradient path
 
 重点观察：
 
-``` text
+```text
 APS
 APM
 APL
@@ -1937,19 +1999,19 @@ latency
 memory
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第五十四部分：实验 5------hidden_dim
 
 例如：
 
-``` text
+```text
 256 → 192
 ```
 
 会连锁影响：
 
-``` text
+```text
 STA channels
 encoder
 decoder
@@ -1961,21 +2023,25 @@ projection
 
 很多 D×D projection 参数量近似：
 
-\[ Params`\propto `{=tex}D\^2 \]
+$$
+Params\propto D^2
+$$
 
 比例：
 
-\[ (192/256)\^2=0.5625 \]
+$$
+(192/256)^2=0.5625
+$$
 
 但总模型变化还取决于 backbone。
 
-------------------------------------------------------------------------
+---
 
 # 第五十五部分：实验 6------FFN Dimension
 
 Decoder FFN：
 
-``` text
+```text
 D
 → Dff
 → D
@@ -1983,52 +2049,56 @@ D
 
 权重近似：
 
-\[ 2DD\_{ff} \]
+$$
+2DD_{ff}
+$$
 
 若：
 
-``` text
+```text
 D=256
 Dff=2048
 ```
 
 则两个主 Linear：
 
-\[ 2`\times256`{=tex}`\times2048`{=tex} = 1,048,576 \]
+$$
+2\times256\times2048 = 1,048,576
+$$
 
 每层约百万级权重。
 
-------------------------------------------------------------------------
+---
 
 # 第五十六部分：实验 7------Deformable Sampling Points
 
 增加采样点：
 
-``` text
+```text
 local evidence ↑
 compute ↑
 ```
 
 减少：
 
-``` text
+```text
 latency ↓
 representation capacity 可能 ↓
 ```
 
 目标不是只追 AP，而是研究：
 
-``` text
+```text
 AP vs latency Pareto
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第五十七部分：实验 8------去掉高分辨率 Feature Level
 
 640 输入：
 
-``` text
+```text
 1/8  : 80×80 = 6400
 1/16 : 40×40 = 1600
 1/32 : 20×20 = 400
@@ -2036,29 +2106,35 @@ AP vs latency Pareto
 
 总位置：
 
-\[ 6400+1600+400=8400 \]
+$$
+6400+1600+400=8400
+$$
 
 去掉 1/8：
 
-\[ 1600+400=2000 \]
+$$
+1600+400=2000
+$$
 
 位置数减少：
 
-\[ 1-`\frac{2000}{8400}`{=tex}`\approx76.2`{=tex}% \]
+$$
+1-\frac{2000}{8400}\approx76.2%
+$$
 
 但预期：
 
-``` text
+```text
 APS 明显受损
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第五十八部分：实验 9------输入分辨率
 
 例如：
 
-``` text
+```text
 512
 640
 768
@@ -2066,7 +2142,7 @@ APS 明显受损
 
 一般：
 
-``` text
+```text
 resolution ↑
 small-object detail ↑
 compute ↑
@@ -2076,17 +2152,19 @@ latency ↑
 
 640 → 1280 的面积：
 
-\[ `\frac{1280^2}{640^2}`{=tex}=4 \]
+$$
+\frac{1280^2}{640^2}=4
+$$
 
 所以分辨率是非常昂贵的性能旋钮。
 
-------------------------------------------------------------------------
+---
 
 # 第五十九部分：实验 10------Dense O2O Recipe Ablation
 
 固定 architecture：
 
-``` text
+```text
 same model
 same init
 same epochs
@@ -2094,7 +2172,7 @@ same epochs
 
 比较：
 
-``` text
+```text
 baseline
 + Mosaic
 + MixUp
@@ -2106,7 +2184,7 @@ full recipe
 
 记录：
 
-``` text
+```text
 GT density/image
 positive matches/image
 AP vs epoch
@@ -2115,7 +2193,7 @@ final AP
 training stability
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第六十部分：为什么不能只看最终 AP？
 
@@ -2123,13 +2201,13 @@ DEIM 的核心价值之一是 fast convergence。
 
 两个实验可能：
 
-``` text
+```text
 最终都 52 AP
 ```
 
 但：
 
-``` text
+```text
 A: epoch 30 达到 50 AP
 B: epoch 60 才达到 50 AP
 ```
@@ -2138,11 +2216,11 @@ B: epoch 60 才达到 50 AP
 
 所以必须画：
 
-``` text
+```text
 AP vs Epoch
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第六十一部分：公平 Ablation
 
@@ -2150,7 +2228,7 @@ AP vs Epoch
 
 例如：
 
-``` text
+```text
 A:
 Q=300
 
@@ -2160,7 +2238,7 @@ Q=200
 
 其余尽量保持：
 
-``` text
+```text
 dataset
 seed
 epochs
@@ -2174,7 +2252,7 @@ hardware
 
 一致。
 
-------------------------------------------------------------------------
+---
 
 # 第六十二部分：为什么 +0.1 AP 不一定可信？
 
@@ -2182,18 +2260,20 @@ hardware
 
 重要实验最好多 seed：
 
-\[ mean`\pm `{=tex}std \]
+$$
+mean\pm std
+$$
 
 如果：
 
-``` text
+```text
 提升 0.1
 标准差 0.2
 ```
 
 就不能轻易声称结构稳定有效。
 
-------------------------------------------------------------------------
+---
 
 # 第六十三部分：Pareto Frontier
 
@@ -2201,7 +2281,7 @@ hardware
 
 例如：
 
-``` text
+```text
 A: 55.0 AP / 12 ms
 B: 54.8 AP / 7 ms
 C: 53.0 AP / 3 ms
@@ -2211,17 +2291,23 @@ C: 53.0 AP / 3 ms
 
 实际问题：
 
-\[ `\max `{=tex}AP \]
+$$
+\max AP
+$$
 
 subject to：
 
-\[ Latency`\le`{=tex}10ms \]
+$$
+Latency\le10ms
+$$
 
-\[ Memory`\le`{=tex}4GB \]
+$$
+Memory\le4GB
+$$
 
 这才是部署模型选择。
 
-------------------------------------------------------------------------
+---
 
 # 第六十四部分：为什么 X 不一定最适合你？
 
@@ -2229,7 +2315,7 @@ X 偏向高精度。
 
 你的系统可能是：
 
-``` text
+```text
 CPU
 iGPU
 Jetson
@@ -2242,7 +2328,7 @@ edge accelerator
 
 Model Zoo 应同时看：
 
-``` text
+```text
 AP
 Params
 GFLOPs
@@ -2252,7 +2338,7 @@ precision
 input resolution
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第六十五部分：最终毕业项目
 
@@ -2262,13 +2348,13 @@ input resolution
 > baseline，完成至少 3 组结构/训练 ablation，完成 PyTorch → ONNX →
 > TensorRT 部署，并提交可复现的技术报告。**
 
-------------------------------------------------------------------------
+---
 
 # 第六十六部分：毕业项目 A------数据审计
 
 输出：
 
-``` text
+```text
 train images
 val images
 classes
@@ -2281,19 +2367,19 @@ image resolution histogram
 invalid annotations
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第六十七部分：毕业项目 B------GT 可视化
 
 随机至少检查：
 
-``` text
+```text
 100 images
 ```
 
 确认：
 
-``` text
+```text
 class
 box
 category mapping
@@ -2304,13 +2390,13 @@ annotation quality
 
 任何明显 dataset bug 都应在训练前解决。
 
-------------------------------------------------------------------------
+---
 
 # 第六十八部分：毕业项目 C------Baseline
 
 选择：
 
-``` text
+```text
 deimv2_dinov3_s
 或
 deimv2_dinov3_x
@@ -2320,7 +2406,7 @@ deimv2_dinov3_x
 
 必须记录：
 
-``` text
+```text
 config
 commit hash
 checkpoint source
@@ -2333,13 +2419,13 @@ input size
 augmentation
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第六十九部分：毕业项目 D------Tiny Overfit
 
 先：
 
-``` text
+```text
 4~16 images
 ```
 
@@ -2347,20 +2433,20 @@ augmentation
 
 预期：
 
-``` text
+```text
 loss 明显下降
 predictions 贴近 GT
 ```
 
 如果不能 overfit：
 
-``` text
+```text
 不要直接开始完整训练
 ```
 
 优先排查：
 
-``` text
+```text
 label
 box
 class mapping
@@ -2369,13 +2455,13 @@ optimizer
 postprocess
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第七十部分：毕业项目 E------正式训练
 
 记录：
 
-``` text
+```text
 loss curves
 AP vs epoch
 LR
@@ -2386,13 +2472,13 @@ GPU memory
 training time
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第七十一部分：毕业项目 F------Baseline Evaluation
 
 至少报告：
 
-``` text
+```text
 AP
 AP50
 AP75
@@ -2406,13 +2492,13 @@ PyTorch latency
 peak memory
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第七十二部分：毕业项目 G------Error Analysis
 
 收集：
 
-``` text
+```text
 50 FP
 50 FN
 50 localization errors
@@ -2422,13 +2508,13 @@ peak memory
 
 总结主要失败模式。
 
-------------------------------------------------------------------------
+---
 
 # 第七十三部分：毕业项目 H------提出假设
 
 例如：
 
-``` text
+```text
 观察：
 small-object miss 很多
 
@@ -2447,13 +2533,13 @@ H3:
 
 先写假设，再改代码。
 
-------------------------------------------------------------------------
+---
 
 # 第七十四部分：毕业项目 I------至少 3 个 Ablation
 
 建议从：
 
-``` text
+```text
 num_queries
 decoder layers
 STA interaction indexes
@@ -2464,35 +2550,37 @@ DINOv3 freeze policy
 
 选择至少三个。
 
-------------------------------------------------------------------------
+---
 
 # 第七十五部分：Ablation 表格模板
 
-  ----------------------------------------------------------------------------------------
+---
+
   Experiment        AP    AP50    AP75     APS     APM     APL   Params   GFLOPs   Latency
-  ------------ ------- ------- ------- ------- ------- ------- -------- -------- ---------
-  Baseline                                                                       
 
-  Exp A                                                                          
+---
 
-  Exp B                                                                          
+  Baseline
 
-  Exp C                                                                          
-  ----------------------------------------------------------------------------------------
+  Exp A
 
-------------------------------------------------------------------------
+  Exp B
+
+  Exp C
+
+---
 
 # 第七十六部分：毕业项目 J------选择 Final Model
 
 不要写：
 
-``` text
+```text
 B 的 AP 最高，所以选 B。
 ```
 
 应该写：
 
-``` text
+```text
 B:
 AP +0.4
 APS +1.1
@@ -2505,13 +2593,13 @@ memory +4%
 
 这才是工程结论。
 
-------------------------------------------------------------------------
+---
 
 # 第七十七部分：毕业项目 K------PyTorch Reference
 
 固定：
 
-``` text
+```text
 batch=1
 input=640×640
 precision=FP32
@@ -2519,7 +2607,7 @@ precision=FP32
 
 分别测：
 
-``` text
+```text
 preprocess
 model
 postprocess
@@ -2528,11 +2616,11 @@ end-to-end
 
 它是 ONNX/TensorRT 的 reference。
 
-------------------------------------------------------------------------
+---
 
 # 第七十八部分：毕业项目 L------ONNX
 
-``` text
+```text
 best checkpoint
 ↓
 load config
@@ -2550,13 +2638,13 @@ checker
 ONNX Runtime
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第七十九部分：毕业项目 M------ONNX Parity
 
 100 张图比较：
 
-``` text
+```text
 raw logits
 raw boxes
 labels
@@ -2566,20 +2654,20 @@ pixel boxes
 
 记录：
 
-``` text
+```text
 MAE
 max error
 detection mismatch
 AP delta
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十部分：毕业项目 N------TensorRT
 
 严格顺序：
 
-``` text
+```text
 ONNX
 ↓
 TensorRT FP32
@@ -2595,25 +2683,27 @@ benchmark
 
 不要：
 
-``` text
+```text
 ONNX
 → FP16
 → 看一张图
 → 宣布部署成功
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十一部分：部署验证矩阵
 
   Backend        Precision     AP   AP50   Latency   Memory Status
-  -------------- ----------- ---- ------ --------- -------- --------
-  PyTorch        FP32                                       
-  ONNX Runtime   FP32                                       
-  TensorRT       FP32                                       
-  TensorRT       FP16                                       
 
-------------------------------------------------------------------------
+---
+
+  PyTorch        FP32
+  ONNX Runtime   FP32
+  TensorRT       FP32
+  TensorRT       FP16
+
+---
 
 # 第八十二部分：AP Delta 阈值
 
@@ -2621,7 +2711,7 @@ ONNX
 
 你可以根据项目定义，例如：
 
-``` text
+```text
 TRT FP32:
 AP delta <= 0.05
 
@@ -2633,20 +2723,20 @@ AP delta <= 0.10
 
 真正阈值取决于：
 
-``` text
+```text
 任务风险
 业务要求
 数据规模
 baseline
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十三部分：毕业项目 O------真实视频
 
 测试：
 
-``` text
+```text
 静态
 快速运动
 小目标
@@ -2658,7 +2748,7 @@ baseline
 
 记录：
 
-``` text
+```text
 end-to-end FPS
 P95 latency
 dropped frames
@@ -2666,19 +2756,19 @@ GPU utilization
 memory
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十四部分：为什么视频与 COCO AP 都需要？
 
 COCO：
 
-``` text
+```text
 检测精度
 ```
 
 视频：
 
-``` text
+```text
 实时性
 pipeline 稳定性
 I/O
@@ -2687,11 +2777,11 @@ temporal behavior
 
 回答的是不同问题。
 
-------------------------------------------------------------------------
+---
 
 # 第八十五部分：最终报告结构
 
-``` text
+```text
 1. Problem
 2. Dataset
 3. Baseline
@@ -2710,13 +2800,13 @@ temporal behavior
 16. Future Work
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十六部分：实验文件组织
 
 建议：
 
-``` text
+```text
 configs/
 checkpoints/
 logs/
@@ -2731,13 +2821,13 @@ environment.txt
 README.md
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第八十七部分：环境记录
 
 至少保存：
 
-``` text
+```text
 OS
 Python
 PyTorch
@@ -2753,7 +2843,7 @@ DEIMv2 commit
 
 部署结果尤其依赖环境。
 
-------------------------------------------------------------------------
+---
 
 # 第八十八部分：为什么 Git Commit 必须记录？
 
@@ -2761,19 +2851,19 @@ DEIMv2 commit
 
 报告必须写：
 
-``` text
+```text
 commit hash
 ```
 
 而不是：
 
-``` text
+```text
 DEIMv2 main
 ```
 
 模型修改也建议每个实验单独 commit/branch：
 
-``` text
+```text
 exp/q200
 exp/decoder4
 exp/sta_4_8_11
@@ -2781,7 +2871,7 @@ exp/sta_4_8_11
 
 让：
 
-``` text
+```text
 checkpoint
 config
 source
@@ -2789,13 +2879,13 @@ source
 
 一一对应。
 
-------------------------------------------------------------------------
+---
 
 # 第八十九部分：不要覆盖同一个 YAML
 
 错误：
 
-``` text
+```text
 修改 config
 训练
 再次修改同一个 config
@@ -2806,38 +2896,38 @@ source
 
 建议：
 
-``` text
+```text
 baseline.yml
 q200.yml
 decoder4.yml
 sta_variant.yml
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第九十部分：实验命名
 
 推荐：
 
-``` text
+```text
 dataset_model_change_seed
 ```
 
 例如：
 
-``` text
+```text
 custom_dinov3x_q200_s0
 custom_dinov3x_dec4_s0
 custom_dinov3x_sta4811_s0
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第九十一部分：部署 Artifact 命名
 
 建议包含：
 
-``` text
+```text
 model
 commit
 input
@@ -2849,15 +2939,15 @@ runtime version
 
 例如：
 
-``` text
+```text
 deimv2_x_abc123_640_b1_fp16_trt10.6.engine
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第九十二部分：部署 Bug 排查树
 
-``` text
+```text
 PyTorch 正确？
 │
 ├─ No
@@ -2896,7 +2986,7 @@ Application 正确？
 Deployment Complete
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第九十三部分：最重要的部署原则
 
@@ -2904,7 +2994,7 @@ Deployment Complete
 
 不要：
 
-``` text
+```text
 PyTorch
 ↓
 直接 C++ TensorRT
@@ -2914,7 +3004,7 @@ PyTorch
 
 而应该：
 
-``` text
+```text
 PyTorch
 ↓ compare
 ONNX Runtime
@@ -2926,13 +3016,13 @@ C++ TensorRT
 
 这样问题才可定位。
 
-------------------------------------------------------------------------
+---
 
 # 第九十四部分：Preprocess Parity Test
 
 同一张图保存：
 
-``` text
+```text
 Python/PyTorch preprocess tensor
 ONNX app preprocess tensor
 C++ preprocess tensor
@@ -2940,7 +3030,7 @@ C++ preprocess tensor
 
 比较：
 
-``` text
+```text
 shape
 dtype
 channel order
@@ -2951,27 +3041,27 @@ selected pixels
 
 很多"部署精度下降"其实发生在模型之前。
 
-------------------------------------------------------------------------
+---
 
 # 第九十五部分：Postprocess Parity Test
 
 固定一组：
 
-``` text
+```text
 logits
 boxes
 ```
 
 分别送：
 
-``` text
+```text
 Python PostProcessor
 C++ PostProcessor
 ```
 
 比较：
 
-``` text
+```text
 top-k indices
 labels
 scores
@@ -2980,13 +3070,13 @@ boxes
 
 这样把模型与后处理完全解耦。
 
-------------------------------------------------------------------------
+---
 
 # 第九十六部分：坐标单元测试
 
 构造：
 
-``` text
+```text
 normalized cxcywh
 =
 [0.5,0.5,0.2,0.4]
@@ -2994,14 +3084,14 @@ normalized cxcywh
 
 原图：
 
-``` text
+```text
 W=1000
 H=500
 ```
 
 则：
 
-``` text
+```text
 x1=400
 y1=150
 x2=600
@@ -3010,13 +3100,13 @@ y2=350
 
 所有 backend 必须一致。
 
-------------------------------------------------------------------------
+---
 
 # 第九十七部分：Class Mapping 单元测试
 
 人为令：
 
-``` text
+```text
 class index=3
 ```
 
@@ -3024,7 +3114,7 @@ class index=3
 
 确认：
 
-``` text
+```text
 PyTorch
 ONNX
 TensorRT
@@ -3033,11 +3123,11 @@ UI label
 
 都显示同一类。
 
-------------------------------------------------------------------------
+---
 
 # 第九十八部分：Top-K 单元测试
 
-``` text
+```text
 Q=3
 C=2
 
@@ -3051,26 +3141,26 @@ scores =
 
 flatten：
 
-``` text
+```text
 [0.1,0.8,0.7,0.2,0.4,0.3]
 ```
 
 top-2：
 
-``` text
+```text
 0.8 → q0,c1
 0.7 → q1,c0
 ```
 
 这是部署端非常值得保留的测试。
 
-------------------------------------------------------------------------
+---
 
 # 第九十九部分：Shape Contract
 
 任何模块都有契约：
 
-``` text
+```text
 input shape
 output shape
 dtype
@@ -3081,7 +3171,7 @@ semantic meaning
 
 例如 STA：
 
-``` text
+```text
 P3 [B,256,H/8,W/8]
 P4 [B,256,H/16,W/16]
 P5 [B,256,H/32,W/32]
@@ -3089,7 +3179,7 @@ P5 [B,256,H/32,W/32]
 
 替换模块时不仅要 shape 对，还要：
 
-``` text
+```text
 feature order
 stride semantics
 spatial correspondence
@@ -3098,11 +3188,11 @@ normalization
 
 正确。
 
-------------------------------------------------------------------------
+---
 
 # 第一百部分：改 Backbone 检查表
 
-``` text
+```text
 return levels
 channels
 strides
@@ -3115,11 +3205,11 @@ encoder in_channels
 encoder feat_strides
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零一部分：改 Encoder 检查表
 
-``` text
+```text
 in_channels
 hidden_dim
 feat_strides
@@ -3131,11 +3221,11 @@ decoder feat_channels
 decoder feat_strides
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零二部分：改 Decoder 检查表
 
-``` text
+```text
 hidden_dim
 num_queries
 num_layers
@@ -3152,11 +3242,11 @@ criterion compatibility
 postprocessor compatibility
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零三部分：改 Loss 检查表
 
-``` text
+```text
 matcher cost
 target definition
 loss weight
@@ -3168,11 +3258,11 @@ AMP numerical stability
 logging
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零四部分：改 Training Recipe 检查表
 
-``` text
+```text
 augmentation schedule
 GT density
 batch size
@@ -3186,13 +3276,13 @@ stage reload
 best checkpoint logic
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零五部分：为什么结构与 Recipe 应分开实验？
 
 如果同时：
 
-``` text
+```text
 改 STA
 改 LR
 改 MixUp
@@ -3203,7 +3293,7 @@ AP 上升后无法归因。
 
 更好的顺序：
 
-``` text
+```text
 architecture ablation
 ↓
 选择结构
@@ -3211,13 +3301,13 @@ architecture ablation
 recipe tuning
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零六部分：统一 Backend Interface
 
 毕业项目建议自己写：
 
-``` python
+```python
 class Backend:
     def preprocess(self, image):
         raise NotImplementedError
@@ -3235,17 +3325,17 @@ class Backend:
 
 实现：
 
-``` text
+```text
 TorchBackend
 ONNXBackend
 TensorRTBackend
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零七部分：统一 Parity Harness
 
-``` python
+```python
 def compare_detections(a, b):
     # deterministic sorting first
     # compare labels
@@ -3256,18 +3346,18 @@ def compare_detections(a, b):
 
 三个 backend 应尽量共享：
 
-``` text
+```text
 same input image
 same preprocessing contract
 same postprocessing contract
 same evaluation
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百零八部分：统一 Benchmark Harness
 
-``` python
+```python
 def benchmark(
     backend,
     images,
@@ -3283,13 +3373,13 @@ def benchmark(
 
 所有实验用同一套 benchmark 代码，避免测量协议漂移。
 
-------------------------------------------------------------------------
+---
 
 # 第一百零九部分：统一 Evaluation Harness
 
 理想结构：
 
-``` text
+```text
 Backend
 ↓
 COCO validation images
@@ -3303,7 +3393,7 @@ AP
 
 这样：
 
-``` text
+```text
 PyTorch
 ONNX
 TensorRT
@@ -3311,7 +3401,7 @@ TensorRT
 
 得到真正可比较的结果。
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十部分：最终报告最重要的三张图
 
@@ -3327,7 +3417,7 @@ TensorRT
 
 展示典型：
 
-``` text
+```text
 FP
 FN
 localization
@@ -3335,13 +3425,13 @@ class confusion
 small-object failure
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十一部分：最终报告最重要的三张表
 
 ## Architecture Table
 
-``` text
+```text
 variant
 backbone
 STA
@@ -3354,7 +3444,7 @@ GFLOPs
 
 ## Accuracy Table
 
-``` text
+```text
 AP
 AP50
 AP75
@@ -3365,7 +3455,7 @@ APL
 
 ## Deployment Table
 
-``` text
+```text
 backend
 precision
 latency
@@ -3374,11 +3464,11 @@ memory
 AP delta
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十二部分：不要做的 10 件事
 
-``` text
+```text
 1. 不验证数据就直接训练
 2. 只看 train loss
 3. 只看 AP 不看失败案例
@@ -3391,11 +3481,11 @@ AP delta
 10. checkpoint/config/source 对不上
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十三部分：24 课知识总图
 
-``` text
+```text
                     DEIMv2
                        │
      ┌─────────────────┼─────────────────┐
@@ -3430,11 +3520,11 @@ AP delta
                Real Application
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十四部分：24 课回顾
 
-``` text
+```text
 01  640×640 图片如何变成 boxes
 02  PyTorch Tensor / Shape
 03  CNN / Stride / Multi-scale
@@ -3464,21 +3554,21 @@ AP delta
 24  Inference / Evaluation / Deployment / Modification / Graduation
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十五部分：最终综合检查题
 
 ## Architecture
 
-1.  CNN hierarchical feature 与 ViT token feature 的差异是什么？
-2.  STA 为什么存在？
-3.  STA 与 HybridEncoder 的职责为什么不同？
-4.  8400 怎样由 640 输入得到？
-5.  query 与 image token 有什么区别？
-6.  deformable attention 为什么适合这里？
-7.  reference box 怎样逐层 refinement？
-8.  FDR 为什么不是简单回归四个数？
-9.  DFINETransformer 与 DEIMTransformer 的取舍是什么？
+1. CNN hierarchical feature 与 ViT token feature 的差异是什么？
+2. STA 为什么存在？
+3. STA 与 HybridEncoder 的职责为什么不同？
+4. 8400 怎样由 640 输入得到？
+5. query 与 image token 有什么区别？
+6. deformable attention 为什么适合这里？
+7. reference box 怎样逐层 refinement？
+8. FDR 为什么不是简单回归四个数？
+9. DFINETransformer 与 DEIMTransformer 的取舍是什么？
 
 ## Training
 
@@ -3531,13 +3621,13 @@ AP delta
 44. 为什么 +0.1 AP 可能不足以证明有效？
 45. 什么是 accuracy-latency Pareto frontier？
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十六部分：最终综合实践
 
 要求独立完成：
 
-``` text
+```text
 Step 1  准备 COCO dataset
 Step 2  dataset audit
 Step 3  GT visualization
@@ -3560,11 +3650,11 @@ Step 19 end-to-end latency
 Step 20 final technical report
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十七部分：毕业验收清单
 
-``` text
+```text
 [ ] 能从 train.py 追完整训练调用链
 [ ] 能追每个核心 tensor
 [ ] 能解释 HGNetv2 与 DINOv3 两条路线
@@ -3596,13 +3686,13 @@ Step 20 final technical report
 [ ] 能写可复现技术报告
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十八部分：官方当前工具清单
 
 本课编写时，官方 README 列出的工程工具包括：
 
-``` text
+```text
 tools/deployment/export_onnx.py
 
 tools/inference/
@@ -3624,7 +3714,7 @@ reference/
 
 它们形成：
 
-``` text
+```text
 training
 → inference
 → export
@@ -3635,13 +3725,13 @@ training
 
 的工程闭环。
 
-------------------------------------------------------------------------
+---
 
 # 第一百一十九部分：本课源码阅读清单
 
 建议亲自打开当前仓库：
 
-``` text
+```text
 README.md
 
 engine/deim/deim.py
@@ -3670,13 +3760,13 @@ reference/
 
 具体文件名和 CLI 参数以你本地 commit 为准。
 
-------------------------------------------------------------------------
+---
 
 # 第一百二十部分：版本阅读原则
 
 整个课程最后再强调：
 
-``` text
+```text
 真实 runtime behavior
 >
 你本地 commit 的源码
@@ -3698,19 +3788,19 @@ checkpoint 对应 config
 
 二者都重要，但工程调试时不能拿论文图替代运行时事实。
 
-------------------------------------------------------------------------
+---
 
 # 第一百二十一部分：课程最终总结
 
 24 课从：
 
-``` text
+```text
 Tensor shape 是什么？
 ```
 
 一路走到：
 
-``` text
+```text
 怎样把 DINOv3-based real-time DETR
 从源码训练到 TensorRT，
 并通过可复现实验证明自己的结构修改是否真的有效？
@@ -3718,7 +3808,7 @@ Tensor shape 是什么？
 
 最重要的是建立五层思维：
 
-``` text
+```text
 第一层：Tensor
 shape / dtype / coordinate
 
@@ -3735,11 +3825,11 @@ data / matching / loss / optimizer / distributed
 evaluation / ablation / deployment / reproducibility
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百二十二部分：最后一张完整地图
 
-``` text
+```text
 Image
   │
   ▼
@@ -3811,7 +3901,7 @@ DEIM / D-FINE Decoder
        └────────────────────────────┘
 ```
 
-------------------------------------------------------------------------
+---
 
 # 第一百二十三部分：本课课后作业
 
@@ -3819,7 +3909,7 @@ DEIM / D-FINE Decoder
 
 记录：
 
-``` text
+```text
 original size
 preprocessed tensor
 backbone outputs
@@ -3836,14 +3926,14 @@ visualization
 
 构造：
 
-``` text
+```text
 Q=3
 C=2
 ```
 
 手算：
 
-``` text
+```text
 sigmoid
 flatten
 top-k
@@ -3858,7 +3948,7 @@ pixel scaling
 
 统一：
 
-``` text
+```text
 B=1
 640×640
 same GPU
@@ -3867,7 +3957,7 @@ same preprocess
 
 比较：
 
-``` text
+```text
 PyTorch
 ONNX Runtime
 TensorRT FP32
@@ -3878,7 +3968,7 @@ TensorRT FP16
 
 100 张图输出：
 
-``` text
+```text
 raw tensor error
 box error
 score error
@@ -3887,13 +3977,13 @@ AP delta
 
 ## 作业 5：num_queries Ablation
 
-``` text
+```text
 300 vs 200
 ```
 
 记录：
 
-``` text
+```text
 AP
 AP75
 latency
@@ -3904,7 +3994,7 @@ memory
 
 关闭 MixUp，比较：
 
-``` text
+```text
 GT density
 AP vs epoch
 final AP
@@ -3918,7 +4008,7 @@ final AP
 
 完整完成：
 
-``` text
+```text
 custom dataset
 training
 evaluation
@@ -3929,13 +4019,13 @@ benchmark
 report
 ```
 
-------------------------------------------------------------------------
+---
 
 # 24 课主课程完结
 
 接下来最有价值的事情，不是继续堆理论，而是把这 24 课变成你自己的能力：
 
-``` text
+```text
 拿真实数据集
 → 建 baseline
 → 找失败模式

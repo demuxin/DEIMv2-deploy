@@ -1,4 +1,5 @@
 # DEIMv2 源码课程 · 第 12 课
+
 # D-FINE 的精细边界框回归——FDR（Fine-grained Distribution Refinement）
 
 > 本课承接第 11 课：我们已经知道 `DFINETransformer` 如何从 8400 个多尺度位置选出 300 个 Query，并通过 Decoder 让 Query 逐层读取图像信息。
@@ -130,7 +131,7 @@ bbox_delta
 
 抽象写成：
 
-\[
+$$
 b_{i+1}
 =
 \sigma
@@ -139,7 +140,7 @@ b_{i+1}
 +
 \Delta_i
 \right)
-\]
+$$
 
 其中：
 
@@ -199,11 +200,11 @@ bin 4 : 0.06
 
 然后可以计算期望：
 
-\[
+$$
 \hat d
 =
 \sum_n p_n W(n)
-\]
+$$
 
 这里：
 
@@ -344,9 +345,9 @@ reg_max = 32
 
 离散 bin 数：
 
-\[
+$$
 reg\_max + 1 = 33
-\]
+$$
 
 四个边界方向：
 
@@ -359,9 +360,9 @@ bottom
 
 所以：
 
-\[
+$$
 4\times33=132
-\]
+$$
 
 因此：
 
@@ -459,9 +460,9 @@ reg_max = 32
 
 因此一个 bbox head 的最后输出维度：
 
-\[
+$$
 4(32+1)=132
-\]
+$$
 
 所以：
 
@@ -769,33 +770,33 @@ Distribution Refinement
 
 设上一层：
 
-\[
+$$
 z_i
-\]
+$$
 
 是 distribution logits。
 
 当前层预测：
 
-\[
+$$
 \Delta z_i
-\]
+$$
 
 则：
 
-\[
+$$
 z_{i+1}
 =
 z_i+\Delta z_i
-\]
+$$
 
 再：
 
-\[
+$$
 p_{i+1}
 =
 softmax(z_{i+1})
-\]
+$$
 
 所以更深层不必：
 
@@ -869,9 +870,9 @@ Q=300
 
 那么：
 
-\[
+$$
 2\times300\times4=2400
-\]
+$$
 
 所以：
 
@@ -904,12 +905,12 @@ Q=300
 
 做：
 
-\[
+$$
 p_n
 =
 \frac{e^{z_n}}
 {\sum_j e^{z_j}}
-\]
+$$
 
 于是：
 
@@ -919,9 +920,9 @@ p_n
 
 仍然是相同 shape，但每行满足：
 
-\[
+$$
 \sum_{n=0}^{32}p_n=1
-\]
+$$
 
 现在才是真正的 probability distribution。
 
@@ -938,11 +939,11 @@ project =
 
 然后：
 
-\[
+$$
 d
 =
 \sum_{n=0}^{32}p_n n
-\]
+$$
 
 但 D-FINE 不是简单这样做。
 
@@ -958,12 +959,12 @@ project = W(n)
 
 所以：
 
-\[
+$$
 d
 =
 \sum_{n=0}^{32}
 p_n W(n)
-\]
+$$
 
 这是理解 D-FINE FDR 的核心。
 
@@ -1030,25 +1031,25 @@ far away  → large range
 
 源码首先计算：
 
-\[
+$$
 upper_1
 =
 |up|\cdot|reg\_scale|
-\]
+$$
 
-\[
+$$
 upper_2
 =
 2|up|\cdot|reg\_scale|
-\]
+$$
 
 然后：
 
-\[
+$$
 step
 =
 (upper_1+1)^{\frac{2}{reg\_max-2}}
-\]
+$$
 
 中心：
 
@@ -1058,21 +1059,21 @@ W(mid) = 0
 
 左右大部分 bin 使用指数形式生成：
 
-\[
+$$
 -(step)^i+1
-\]
+$$
 
 和：
 
-\[
+$$
 (step)^i-1
-\]
+$$
 
 最外侧两个 endpoint 则放到：
 
-\[
+$$
 -upper_2,\quad +upper_2
-\]
+$$
 
 因此得到一个：
 
@@ -1098,20 +1099,20 @@ up = 0.5
 
 因此：
 
-\[
+$$
 upper_1=0.5\times8=4
-\]
+$$
 
-\[
+$$
 upper_2=8
-\]
+$$
 
-\[
+$$
 step
 =
 (4+1)^{2/30}
 \approx1.11326
-\]
+$$
 
 33 个 W(n) 约为：
 
@@ -1234,7 +1235,7 @@ P =
 
 那么：
 
-\[
+$$
 d
 =
 0.05(-2)
@@ -1242,15 +1243,15 @@ d
 +0.60(0)
 +0.20(1)
 +0.05(2)
-\]
+$$
 
-\[
+$$
 d
 =
 -0.1-0.1+0+0.2+0.1
 =
 0.1
-\]
+$$
 
 虽然 bin 是离散的，但期望：
 
@@ -1336,15 +1337,15 @@ W0,W1,...,W32
 
 那么线性运算本质上得到：
 
-\[
+$$
 p_0W_0+p_1W_1+\cdots+p_{32}W_{32}
-\]
+$$
 
 也就是：
 
-\[
+$$
 E[W]
-\]
+$$
 
 所以源码虽然只是一行：
 
@@ -1447,19 +1448,19 @@ reg_scale
 
 设 reference：
 
-\[
+$$
 P=(x,y,w,h)
-\]
+$$
 
 distribution integral 得到：
 
-\[
+$$
 d=(d_l,d_t,d_r,d_b)
-\]
+$$
 
 源码计算：
 
-\[
+$$
 x_1
 =
 x-
@@ -1467,9 +1468,9 @@ x-
 \frac{reg\_scale}{2}+d_l
 \right)
 \frac{w}{reg\_scale}
-\]
+$$
 
-\[
+$$
 y_1
 =
 y-
@@ -1477,9 +1478,9 @@ y-
 \frac{reg\_scale}{2}+d_t
 \right)
 \frac{h}{reg\_scale}
-\]
+$$
 
-\[
+$$
 x_2
 =
 x+
@@ -1487,9 +1488,9 @@ x+
 \frac{reg\_scale}{2}+d_r
 \right)
 \frac{w}{reg\_scale}
-\]
+$$
 
-\[
+$$
 y_2
 =
 y+
@@ -1497,7 +1498,7 @@ y+
 \frac{reg\_scale}{2}+d_b
 \right)
 \frac{h}{reg\_scale}
-\]
+$$
 
 然后：
 
@@ -1512,7 +1513,7 @@ y+
 
 例如左边界：
 
-\[
+$$
 x_1
 =
 x-
@@ -1520,63 +1521,63 @@ x-
 \frac{s}{2}+d_l
 \right)
 \frac{w}{s}
-\]
+$$
 
 其中：
 
-\[
+$$
 s=reg\_scale
-\]
+$$
 
 展开：
 
-\[
+$$
 x_1
 =
 x-\frac{w}{2}-d_l\frac{w}{s}
-\]
+$$
 
 而 reference box 原本左边界就是：
 
-\[
+$$
 x_{1,ref}=x-\frac{w}{2}
-\]
+$$
 
 因此：
 
-\[
+$$
 x_1
 =
 x_{1,ref}
 -
 d_l\frac{w}{s}
-\]
+$$
 
 同理：
 
-\[
+$$
 y_1
 =
 y_{1,ref}
 -
 d_t\frac{h}{s}
-\]
+$$
 
-\[
+$$
 x_2
 =
 x_{2,ref}
 +
 d_r\frac{w}{s}
-\]
+$$
 
-\[
+$$
 y_2
 =
 y_{2,ref}
 +
 d_b\frac{h}{s}
-\]
+$$
 
 现在 FDR 的几何意义非常清楚了：
 
@@ -1588,27 +1589,27 @@ d_b\frac{h}{s}
 
 令：
 
-\[
+$$
 d_l=d_t=d_r=d_b=0
-\]
+$$
 
 则：
 
-\[
+$$
 x_1=x-\frac{w}{2}
-\]
+$$
 
-\[
+$$
 y_1=y-\frac{h}{2}
-\]
+$$
 
-\[
+$$
 x_2=x+\frac{w}{2}
-\]
+$$
 
-\[
+$$
 y_2=y+\frac{h}{2}
-\]
+$$
 
 这恰好就是 reference box 自己。
 
@@ -1632,13 +1633,13 @@ identity refinement
 
 以左边界为例：
 
-\[
+$$
 x_1
 =
 x_{1,ref}
 -
 d_l\frac{w}{s}
-\]
+$$
 
 如果：
 
@@ -1670,13 +1671,13 @@ x1 变大
 
 右边界：
 
-\[
+$$
 x_2
 =
 x_{2,ref}
 +
 d_r\frac{w}{s}
-\]
+$$
 
 所以：
 
@@ -1727,55 +1728,55 @@ d_b = 0
 
 单位：
 
-\[
+$$
 w/s=0.20/8=0.025
-\]
+$$
 
-\[
+$$
 h/s=0.40/8=0.05
-\]
+$$
 
 于是：
 
 ### 左边界
 
-\[
+$$
 x_1
 =
 0.40-1.0(0.025)
 =
 0.375
-\]
+$$
 
 ### 上边界
 
-\[
+$$
 y_1
 =
 0.30-(-0.5)(0.05)
 =
 0.325
-\]
+$$
 
 ### 右边界
 
-\[
+$$
 x_2
 =
 0.60+2.0(0.025)
 =
 0.65
-\]
+$$
 
 ### 下边界
 
-\[
+$$
 y_2
 =
 0.70+0(0.05)
 =
 0.70
-\]
+$$
 
 最终：
 
@@ -1808,11 +1809,11 @@ h = 0.700-0.325 = 0.375
 
 注意：
 
-\[
+$$
 \Delta x
 =
 d\frac{w}{reg\_scale}
-\]
+$$
 
 不是固定像素位移。
 
@@ -1850,9 +1851,9 @@ d\frac{w}{reg\_scale}
 
 从：
 
-\[
+$$
 \Delta x=d\frac{w}{s}
-\]
+$$
 
 看，`s=reg_scale` 影响几何缩放。
 
@@ -2128,9 +2129,9 @@ FDR = 把 DFL 搬进 DETR
 
 间隔就是：
 
-\[
+$$
 16/32=0.5
-\]
+$$
 
 中心附近只有：
 
@@ -2174,9 +2175,9 @@ FDR = 把 DFL 搬进 DETR
 
 但最终：
 
-\[
+$$
 d=\sum p_nW(n)
-\]
+$$
 
 是连续值。
 
@@ -2196,13 +2197,13 @@ P3 = 0.7
 
 则：
 
-\[
+$$
 d
 =
 0.3(0)+0.7(0.1133)
 =
 0.07931
-\]
+$$
 
 它并不等于任何一个 bin。
 
@@ -2282,14 +2283,14 @@ target distance
 
 例如左边：
 
-\[
+$$
 d_l
 =
 \frac{x-x_{1,gt}}
 {w/reg\_scale}
 -
 \frac{reg\_scale}{2}
-\]
+$$
 
 这正好对应 `distance2bbox()` 的逆关系。
 
@@ -2337,35 +2338,35 @@ W_right = 0.2394
 
 设：
 
-\[
+$$
 a=W_k
-\]
+$$
 
-\[
+$$
 b=W_{k+1}
-\]
+$$
 
 GT：
 
-\[
+$$
 g\in[a,b]
-\]
+$$
 
 则右侧权重：
 
-\[
+$$
 w_r
 =
 \frac{g-a}{b-a}
-\]
+$$
 
 左侧：
 
-\[
+$$
 w_l
 =
 1-w_r
-\]
+$$
 
 例如：
 
@@ -2377,18 +2378,18 @@ g = 0.18
 
 则：
 
-\[
+$$
 w_r
 =
 \frac{0.18-0.1133}
 {0.2394-0.1133}
 \approx0.529
-\]
+$$
 
-\[
+$$
 w_l
 \approx0.471
-\]
+$$
 
 所以 target 不是粗暴 one-hot：
 
@@ -2452,13 +2453,13 @@ right bin = k+1
 
 时，loss 可以理解为：
 
-\[
+$$
 L_{FGL}
 =
 w_l CE(z,k)
 +
 w_r CE(z,k+1)
-\]
+$$
 
 其中：
 
@@ -2656,9 +2657,9 @@ mean
 
 四个方向：
 
-\[
+$$
 4\times5=20
-\]
+$$
 
 因此 LQE MLP 输入：
 
@@ -3635,24 +3636,24 @@ refined box
 
 FDR 可以浓缩成：
 
-\[
+$$
 z
 \in
 \mathbb{R}^{4\times33}
-\]
+$$
 
-\[
+$$
 p_{k,n}
 =
 softmax(z_{k,:})_n
-\]
+$$
 
-\[
+$$
 d_k
 =
 \sum_{n=0}^{32}
 p_{k,n}W(n)
-\]
+$$
 
 其中：
 
@@ -3662,42 +3663,42 @@ k ∈ {left, top, right, bottom}
 
 然后：
 
-\[
+$$
 x_1
 =
 x-\frac{w}{2}
 -d_l\frac{w}{s}
-\]
+$$
 
-\[
+$$
 y_1
 =
 y-\frac{h}{2}
 -d_t\frac{h}{s}
-\]
+$$
 
-\[
+$$
 x_2
 =
 x+\frac{w}{2}
 +d_r\frac{w}{s}
-\]
+$$
 
-\[
+$$
 y_2
 =
 y+\frac{h}{2}
 +d_b\frac{h}{s}
-\]
+$$
 
 最后：
 
-\[
+$$
 (cx,cy,w,h)
 =
 xyxy\_to\_cxcywh
 (x_1,y_1,x_2,y_2)
-\]
+$$
 
 这几行就是 FDR inference 的数学核心。
 
@@ -4047,9 +4048,9 @@ probability-weighted expectation
 
 即：
 
-\[
+$$
 \sum p_nW(n)
-\]
+$$
 
 这样才能得到连续 refinement。
 
@@ -4368,11 +4369,11 @@ distribution refinement
 
 定义：
 
-\[
+$$
 H(p)
 =
 -\sum_n p_n\log p_n
-\]
+$$
 
 代码：
 
@@ -4406,19 +4407,19 @@ entropy
 
 # 100. 本课 Shape 速查表
 
-| Tensor | Shape | 含义 |
-|---|---:|---|
-| Decoder output | `[B,Q,384]` | Query feature |
-| Preliminary delta | `[B,Q,4]` | 粗 box correction |
-| Preliminary box | `[B,Q,4]` | FDR reference |
-| `pred_corners` | `[B,Q,132]` | 4×33 distribution logits |
-| Reshaped corners | `[B,Q,4,33]` | 四个边界分布 |
-| Softmax probabilities | `[B,Q,4,33]` | localization distributions |
-| `project=W(n)` | `[33]` | 非均匀 bin 坐标 |
-| Integral distance | `[B,Q,4]` | l/t/r/b refinement |
-| Refined bbox | `[B,Q,4]` | cx/cy/w/h |
-| LQE top-k stats | `[B,Q,20]` | 4×(4 top probs + mean) |
-| LQE quality | `[B,Q,1]` | localization quality correction |
+| Tensor                |          Shape | 含义                            |
+| --------------------- | -------------: | ------------------------------- |
+| Decoder output        |  `[B,Q,384]` | Query feature                   |
+| Preliminary delta     |    `[B,Q,4]` | 粗 box correction               |
+| Preliminary box       |    `[B,Q,4]` | FDR reference                   |
+| `pred_corners`      |  `[B,Q,132]` | 4×33 distribution logits       |
+| Reshaped corners      | `[B,Q,4,33]` | 四个边界分布                    |
+| Softmax probabilities | `[B,Q,4,33]` | localization distributions      |
+| `project=W(n)`      |       `[33]` | 非均匀 bin 坐标                 |
+| Integral distance     |    `[B,Q,4]` | l/t/r/b refinement              |
+| Refined bbox          |    `[B,Q,4]` | cx/cy/w/h                       |
+| LQE top-k stats       |   `[B,Q,20]` | 4×(4 top probs + mean)         |
+| LQE quality           |    `[B,Q,1]` | localization quality correction |
 
 ---
 
@@ -4471,7 +4472,7 @@ Top-4 localization probabilities
 
 # 102. 本课练习
 
-### 练习 1
+练习 1
 
 为什么：
 
@@ -4481,17 +4482,17 @@ reg_max=32
 
 对应 33 个 bins？
 
-### 练习 2
+练习 2
 
 为什么四个方向最终输出：
 
-\[
+$$
 4\times33=132
-\]
+$$
 
 而不是 128？
 
-### 练习 3
+练习 3
 
 解释：
 
@@ -4505,11 +4506,11 @@ pred_corners
 [x1,y1,x2,y2]
 ```
 
-### 练习 4
+练习 4
 
 写出 Integral 的核心公式。
 
-### 练习 5
+练习 5
 
 为什么 D-FINE 不直接使用：
 
@@ -4517,9 +4518,7 @@ pred_corners
 W=[0,1,...,32]
 ```
 
-？
-
-### 练习 6
+练习 6
 
 X 配置：
 
@@ -4535,7 +4534,7 @@ upper_bound1
 upper_bound2
 ```
 
-### 练习 7
+练习 7
 
 为什么：
 
@@ -4545,7 +4544,7 @@ W(mid)=0
 
 非常重要？
 
-### 练习 8
+练习 8
 
 证明：
 
@@ -4555,7 +4554,7 @@ distance=[0,0,0,0]
 
 时 `distance2bbox` 输出等于 reference box。
 
-### 练习 9
+练习 9
 
 Reference：
 
@@ -4573,7 +4572,7 @@ d_l=1
 
 左边界相对 reference 左边界移动多少？
 
-### 练习 10
+练习 10
 
 为什么同样的：
 
@@ -4583,19 +4582,19 @@ d_l=1
 
 对大目标和小目标产生不同绝对位移？
 
-### 练习 11
+练习 11
 
 为什么 distribution regression 最终仍能产生连续坐标？
 
-### 练习 12
+练习 12
 
 `translate_gt()` 为什么需要左右两个 bins，而不是只选最近 bin？
 
-### 练习 13
+练习 13
 
 FGL、L1、GIoU 分别监督什么？
 
-### 练习 14
+练习 14
 
 为什么 LQE 能区分：
 
@@ -4606,11 +4605,11 @@ FGL、L1、GIoU 分别监督什么？
 
 的两个 distribution？
 
-### 练习 15
+练习 15
 
 为什么更深 Decoder Layer 不需要从零预测完整 distribution？
 
-### 练习 16
+练习 16
 
 解释：
 
@@ -4623,7 +4622,7 @@ previous pred_corners
 
 的意义。
 
-### 练习 17
+练习 17
 
 为什么：
 
@@ -4639,7 +4638,7 @@ pred_corners_undetach
 
 的梯度策略不同？
 
-### 练习 18
+练习 18
 
 为什么 FDR 特别适合：
 
@@ -4647,9 +4646,7 @@ pred_corners_undetach
 coarse-to-fine Decoder
 ```
 
-？
-
-### 练习 19
+练习 19
 
 画出：
 
@@ -4659,7 +4656,7 @@ FDR → reference → deformable attention → FDR
 
 闭环。
 
-### 练习 20
+练习 20
 
 如果把 `reg_scale` 从 8 改成 4，你至少应该检查哪两部分数学行为发生变化？
 
@@ -4667,7 +4664,7 @@ FDR → reference → deformable attention → FDR
 
 # 103. 练习答案摘要
 
-### 1
+1、
 
 bin index：
 
@@ -4677,45 +4674,45 @@ bin index：
 
 总共：
 
-\[
+$$
 32+1=33
-\]
+$$
 
-### 2
+2、
 
 四个边界方向，每个 33 logits：
 
-\[
+$$
 4(32+1)=132
-\]
+$$
 
-### 4
+4、
 
-\[
+$$
 d
 =
 \sum_n p_nW(n)
-\]
+$$
 
-### 6
+6、
 
-\[
+$$
 upper_1
 =
 0.5\times8
 =
 4
-\]
+$$
 
-\[
+$$
 upper_2
 =
 0.5\times8\times2
 =
 8
-\]
+$$
 
-### 7
+7、
 
 因为：
 
@@ -4731,9 +4728,9 @@ identity refinement
 
 即 reference box 无需改变。
 
-### 9
+9、
 
-\[
+$$
 \Delta x
 =
 d_l\frac{w}{s}
@@ -4741,7 +4738,7 @@ d_l\frac{w}{s}
 1\times\frac{0.2}{8}
 =
 0.025
-\]
+$$
 
 左边界向左移动：
 
@@ -4749,7 +4746,7 @@ d_l\frac{w}{s}
 0.025
 ```
 
-### 10
+10、
 
 因为位移按：
 
@@ -4759,7 +4756,7 @@ reference w/h
 
 缩放。
 
-### 11
+11、
 
 因为不是 argmax，而是：
 
@@ -4767,11 +4764,11 @@ reference w/h
 probability-weighted expectation
 ```
 
-### 12
+12、
 
 为了保留连续 GT 位于两个离散坐标之间的精确位置。
 
-### 13
+13、
 
 ```text
 FGL  → distribution
@@ -4779,11 +4776,11 @@ L1   → box coordinate
 GIoU → overlap geometry
 ```
 
-### 18
+18、
 
 因为 reference 越来越准时，需要的 residual 越接近 0，而 W(n) 恰好在 0 附近最细。
 
-### 20
+20、
 
 至少检查：
 

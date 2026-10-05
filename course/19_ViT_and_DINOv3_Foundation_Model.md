@@ -1,4 +1,5 @@
 # DEIMv2 源码课程 · 第 19 课
+
 # ViT 与 DINOv3——从 CNN 世界切换到 Foundation Model
 
 > 本课目标：从 CNN 的 `[B,C,H,W]` 思维切换到 ViT / DINOv3 的 token 思维，并为下一课 **STA（Spatial Tuning Adapter）** 做完整铺垫。
@@ -256,9 +257,9 @@ patch_size = 16
 
 patch token 数：
 
-\[
+$$
 N_p = 40\times40=1600
-\]
+$$
 
 所以：
 
@@ -292,9 +293,9 @@ D = 384
 
 总元素：
 
-\[
+$$
 3\times16\times16=768
-\]
+$$
 
 最直观的理解是：
 
@@ -651,9 +652,9 @@ x_i = patch_embedding_i + position_embedding_i
 
 形式：
 
-\[
+$$
 z_i = e_i + p_i
-\]
+$$
 
 其中：
 
@@ -797,9 +798,9 @@ heads：
 
 所以：
 
-\[
+$$
 d_h=\frac{384}{6}=64
-\]
+$$
 
 每个 head：
 
@@ -823,23 +824,23 @@ d_h=\frac{384}{6}=64
 
 输入 token：
 
-\[
+$$
 X\in\mathbb{R}^{B\times N\times384}
-\]
+$$
 
 线性投影：
 
-\[
+$$
 Q=XW_Q
-\]
+$$
 
-\[
+$$
 K=XW_K
-\]
+$$
 
-\[
+$$
 V=XW_V
-\]
+$$
 
 拆 6 heads：
 
@@ -850,19 +851,19 @@ Q,K,V
 
 单个 head：
 
-\[
-Attention(Q,K,V)
+$$
+\mathrm{Attention}(Q,K,V)
 =
-softmax\left(
+\mathrm{softmax}\left(
 \frac{QK^T}{\sqrt{64}}
 \right)V
-\]
+$$
 
 其中：
 
-\[
+$$
 \sqrt{64}=8
-\]
+$$
 
 ---
 
@@ -888,17 +889,17 @@ QKᵀ
 
 元素数量：
 
-\[
+$$
 1600^2=2,560,000
-\]
+$$
 
 6 heads：
 
-\[
+$$
 6\times2,560,000
 =
 15,360,000
-\]
+$$
 
 这还只是一个 batch sample、一个 block 中 attention score 的数量级直觉。
 
@@ -934,9 +935,9 @@ n_storage_tokens = 4
 
 总计：
 
-\[
+$$
 N=1605
-\]
+$$
 
 所以内部 token tensor 是：
 
@@ -1195,13 +1196,13 @@ x
 
 抽象公式：
 
-\[
+$$
 X' = X + Attention(Norm(X))
-\]
+$$
 
-\[
+$$
 X'' = X' + FFN(Norm(X'))
-\]
+$$
 
 DINOv3 当前 block 还包含 LayerScale 等工程细节，但主干思想就是：
 
@@ -1994,11 +1995,11 @@ FFN：
 
 经典形式：
 
-\[
+$$
 FFN(x)
 =
 W_2\sigma(W_1x)
-\]
+$$
 
 如果：
 
@@ -2009,9 +2010,9 @@ ffn_ratio = 6
 
 中间维度的量级：
 
-\[
+$$
 384\times6=2304
-\]
+$$
 
 所以可以粗略理解：
 
@@ -2048,11 +2049,11 @@ element-wise modulation
 
 典型思想：
 
-\[
+$$
 SwiGLU(x)
 =
 Swish(xW_a)\odot(xW_b)
-\]
+$$
 
 然后再投影回 embedding dimension。
 
@@ -2108,40 +2109,40 @@ batch size
 
 对于 token：
 
-\[
+$$
 x\in\mathbb{R}^{384}
-\]
+$$
 
 均值：
 
-\[
+$$
 \mu=\frac1D\sum_{i=1}^D x_i
-\]
+$$
 
 方差：
 
-\[
+$$
 \sigma^2
 =
 \frac1D
 \sum_{i=1}^D
 (x_i-\mu)^2
-\]
+$$
 
 归一化：
 
-\[
+$$
 \hat x_i
 =
 \frac{x_i-\mu}
 {\sqrt{\sigma^2+\epsilon}}
-\]
+$$
 
 再：
 
-\[
+$$
 y_i=\gamma_i\hat x_i+\beta_i
-\]
+$$
 
 ---
 
@@ -2157,9 +2158,9 @@ x → complicated transform
 
 Residual：
 
-\[
+$$
 y=x+F(x)
-\]
+$$
 
 让 block 学：
 
@@ -2183,9 +2184,9 @@ layerscale_init = 1e-5
 
 直觉上可以理解为：
 
-\[
+$$
 y=x+\gamma F(x)
-\]
+$$
 
 其中：
 
@@ -2390,31 +2391,31 @@ CNN stride-8 feature：
 
 patch 16：
 
-\[
+$$
 40\times40=1600
-\]
+$$
 
 patch 8：
 
-\[
+$$
 80\times80=6400
-\]
+$$
 
 全局 attention complexity：
 
-\[
+$$
 O(N^2)
-\]
+$$
 
 比值：
 
-\[
+$$
 \left(
 \frac{6400}{1600}
 \right)^2
 =
 16
-\]
+$$
 
 attention score 数量级会放大约：
 
@@ -3342,18 +3343,18 @@ feature pyramid
 
 # 87. CNN / ViT 对照表
 
-| CNN 概念 | ViT 对应理解 |
-|---|---|
-| pixel/feature cell | patch token |
-| channels C | embedding dim D |
-| H×W | token grid |
-| stride | patch size / adaptation stride |
-| 3×3 conv | token mixing via attention |
-| stage | transformer block depth |
-| BatchNorm | LayerNorm 常见 |
-| hierarchical pyramid | 原生 plain ViT 通常没有 |
-| local receptive field | global attention |
-| C3/C4/C5 | 需要 adapter 构造 |
+| CNN 概念              | ViT 对应理解                   |
+| --------------------- | ------------------------------ |
+| pixel/feature cell    | patch token                    |
+| channels C            | embedding dim D                |
+| H×W                  | token grid                     |
+| stride                | patch size / adaptation stride |
+| 3×3 conv             | token mixing via attention     |
+| stage                 | transformer block depth        |
+| BatchNorm             | LayerNorm 常见                 |
+| hierarchical pyramid  | 原生 plain ViT 通常没有        |
+| local receptive field | global attention               |
+| C3/C4/C5              | 需要 adapter 构造              |
 
 ---
 
@@ -3361,22 +3362,22 @@ feature pyramid
 
 以 X、640×640 为例：
 
-| 项目 | 数值 |
-|---|---:|
-| input | 640×640 |
-| patch size | 16 |
-| patch grid | 40×40 |
-| patch tokens | 1600 |
-| CLS tokens | 1 |
-| storage tokens | 4 |
-| Transformer sequence | 1605 |
-| DINO embed dim | 384 |
-| ViT depth | 12 |
-| attention heads | 6 |
-| head dim | 64 |
-| FFN ratio | 6 |
-| interaction indexes | 5, 8, 11 |
-| detector hidden dim | 256 |
+| 项目                    |      数值 |
+| ----------------------- | --------: |
+| input                   |  640×640 |
+| patch size              |        16 |
+| patch grid              |    40×40 |
+| patch tokens            |      1600 |
+| CLS tokens              |         1 |
+| storage tokens          |         4 |
+| Transformer sequence    |      1605 |
+| DINO embed dim          |       384 |
+| ViT depth               |        12 |
+| attention heads         |         6 |
+| head dim                |        64 |
+| FFN ratio               |         6 |
+| interaction indexes     |  5, 8, 11 |
+| detector hidden dim     |       256 |
 | target detector strides | 8, 16, 32 |
 
 ---
@@ -3385,7 +3386,7 @@ feature pyramid
 
 第 7 / 11 / 14 课我们经常看到：
 
-\[
+$$
 8400
 =
 80\times80
@@ -3393,7 +3394,7 @@ feature pyramid
 40\times40
 +
 20\times20
-\]
+$$
 
 这是 detector 三尺度 feature flatten 后：
 
@@ -3733,69 +3734,69 @@ STA interaction
 
 ## Patch 数量
 
-\[
+$$
 H_p=\frac{H}{P}
-\]
+$$
 
-\[
+$$
 W_p=\frac{W}{P}
-\]
+$$
 
-\[
+$$
 N=H_pW_p
-\]
+$$
 
 640 / patch16：
 
-\[
+$$
 N=40\times40=1600
-\]
+$$
 
 ---
 
 ## Patch raw dimension
 
-\[
+$$
 D_{raw}
 =
 C P^2
-\]
+$$
 
 所以：
 
-\[
+$$
 3\times16^2
 =
 768
-\]
+$$
 
 ---
 
 ## Multi-head dimension
 
-\[
+$$
 d_h=\frac{D}{h}
-\]
+$$
 
 S+：
 
-\[
+$$
 \frac{384}{6}=64
-\]
+$$
 
 ---
 
 ## Attention
 
-\[
-Attention(Q,K,V)
+$$
+\mathrm{Attention}(Q,K,V)
 =
-softmax
+\mathrm{softmax}
 \left(
 \frac{QK^T}
 {\sqrt{d_h}}
 \right)V
-\]
+$$
 
 ---
 
@@ -3803,9 +3804,9 @@ softmax
 
 主要 token mixing 项：
 
-\[
+$$
 O(N^2D)
-\]
+$$
 
 所以 token 数增加非常昂贵。
 
@@ -3813,32 +3814,32 @@ O(N^2D)
 
 ## LayerNorm
 
-\[
+$$
 \hat x_i
 =
 \frac{x_i-\mu}
 {\sqrt{\sigma^2+\epsilon}}
-\]
+$$
 
-\[
+$$
 y_i
 =
 \gamma_i\hat x_i+\beta_i
-\]
+$$
 
 ---
 
 ## Residual
 
-\[
+$$
 y=x+F(x)
-\]
+$$
 
 ---
 
 # 97. 本课最容易犯的 15 个错误
 
-### 错误 1
+错误 1
 
 ```text
 DINOv3-S+ hidden dim = 256
@@ -3856,7 +3857,7 @@ DINOv3-S+ hidden dim = 256
 
 ---
 
-### 错误 2
+错误 2
 
 ```text
 640×640 / patch16
@@ -3873,7 +3874,7 @@ DINOv3-S+ hidden dim = 256
 
 ---
 
-### 错误 3
+错误 3
 
 ```text
 block 5 → stride 8
@@ -3891,7 +3892,7 @@ plain ViT 三层原生 patch grid 仍然是：
 
 ---
 
-### 错误 4
+错误 4
 
 ```text
 token 经过 Transformer 后数量逐层下降
@@ -3903,7 +3904,7 @@ DINOv3 plain ViT block 保持 sequence length。
 
 ---
 
-### 错误 5
+错误 5
 
 ```text
 patch token = object query
@@ -3913,7 +3914,7 @@ patch token = object query
 
 ---
 
-### 错误 6
+错误 6
 
 ```text
 reshape 回 [B,C,H,W]
@@ -3924,7 +3925,7 @@ shape 相同，representation mechanism 不同。
 
 ---
 
-### 错误 7
+错误 7
 
 ```text
 ViT 有 global attention，
@@ -3935,7 +3936,7 @@ global semantics 不等于 multi-scale localization。
 
 ---
 
-### 错误 8
+错误 8
 
 ```text
 把 40×40 interpolate 成 80×80
@@ -3948,7 +3949,7 @@ global semantics 不等于 multi-scale localization。
 
 ---
 
-### 错误 9
+错误 9
 
 ```text
 CLS 是每个 patch 的类别
@@ -3960,7 +3961,7 @@ CLS 是一个全局 learnable token。
 
 ---
 
-### 错误 10
+错误 10
 
 ```text
 storage token 是图像 patch
@@ -3972,7 +3973,7 @@ storage token 是图像 patch
 
 ---
 
-### 错误 11
+错误 11
 
 ```text
 ViT block 越深，H/W 越小
@@ -3982,7 +3983,7 @@ plain ViT 不成立。
 
 ---
 
-### 错误 12
+错误 12
 
 ```text
 patch embedding 必须写成 Linear
@@ -3994,7 +3995,7 @@ Conv2d(k=P,s=P) 是非常自然的等价实现。
 
 ---
 
-### 错误 13
+错误 13
 
 ```text
 DINOv3 就是 DEIMv2 detector
@@ -4006,7 +4007,7 @@ DINOv3 就是 DEIMv2 detector
 
 ---
 
-### 错误 14
+错误 14
 
 ```text
 Foundation Model 只是更大的模型
@@ -4018,7 +4019,7 @@ Foundation Model 只是更大的模型
 
 ---
 
-### 错误 15
+错误 15
 
 ```text
 finetune=True 就意味着使用 detector LR=5e-4
@@ -4210,9 +4211,9 @@ patch16 下 token 数。
 
 然后计算：
 
-\[
+$$
 N^2
-\]
+$$
 
 观察全局 attention 复杂度增长。
 
@@ -4483,15 +4484,10 @@ interaction_indexes=[5,8,11]
 
 本讲义针对当前公开版本进行核对，重点依据：
 
-1. DEIMv2 官方 X 配置  
-   `configs/deimv2/deimv2_dinov3_x_coco.yml`
-
+1. DEIMv2 官方 X 配置`configs/deimv2/deimv2_dinov3_x_coco.yml`
 2. DEIMv2 官方 README
-
 3. DINOv3 官方 `hub/backbones.py`
-
 4. DINOv3 官方 `layers/patch_embed.py`
-
 5. DINOv3 官方 `models/vision_transformer.py`
 
 特别需要注意：
@@ -4506,22 +4502,12 @@ interaction_indexes=[5,8,11]
 
 # 108. 参考资料
 
-- DEIMv2 official repository  
-  https://github.com/Intellindust-AI-Lab/DEIMv2
-
-- DEIMv2 X config  
-  https://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/configs/deimv2/deimv2_dinov3_x_coco.yml
-
-- DINOv3 official repository  
-  https://github.com/facebookresearch/dinov3
-
-- DINOv3 PatchEmbed  
-  https://github.com/facebookresearch/dinov3/blob/main/dinov3/layers/patch_embed.py
-
-- DINOv3 ViT implementation  
-  https://github.com/facebookresearch/dinov3/blob/main/dinov3/models/vision_transformer.py
-
-- DINOv3 backbone constructors  
+- DEIMv2 official repositoryhttps://github.com/Intellindust-AI-Lab/DEIMv2
+- DEIMv2 X confighttps://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/configs/deimv2/deimv2_dinov3_x_coco.yml
+- DINOv3 official repositoryhttps://github.com/facebookresearch/dinov3
+- DINOv3 PatchEmbedhttps://github.com/facebookresearch/dinov3/blob/main/dinov3/layers/patch_embed.py
+- DINOv3 ViT implementationhttps://github.com/facebookresearch/dinov3/blob/main/dinov3/models/vision_transformer.py
+- DINOv3 backbone constructors
   https://github.com/facebookresearch/dinov3/blob/main/dinov3/hub/backbones.py
 
 ---

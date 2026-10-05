@@ -5,9 +5,9 @@
 
 第 15 课我们已经知道 Dense O2O 的本质不是把 O2O 改成 O2M，而是：
 
-\[
+$$
 \boxed{\text{增加每个最终训练输入中的 GT 数量，同时保持每个 GT 只匹配一个 Query}}
-\]
+$$
 
 第 16 课又解决了 Dense O2O 带来的另一个问题：更多 matched positives 中会混入更多低质量匹配，因此 DEIM 使用 MAL 来改善分类优化。
 
@@ -48,11 +48,11 @@ MAL + box losses
 3. **CopyBlend**：同样位于 collate 阶段，从当前 batch 建立 object pool，把满足条件的目标 patch 复制/混合到其他图像中，并把新 box/label 加入 targets。
 4. 三者的共同目的之一都是让：
 
-\[
+$$
 N_{\text{GT per input}}\uparrow
 \Rightarrow
 N_{\text{O2O positives}}\uparrow
-\]
+$$
 
 但它们制造“密集监督”的方式完全不同。
 
@@ -227,19 +227,19 @@ MixUp / CopyBlend 则直接利用：
 
 如果所有目标都保留：
 
-\[
+$$
 N_{\text{mosaic}}
 =
 4+7+5+6
 =
 22
-\]
+$$
 
 原始单图平均：
 
-\[
+$$
 \bar N=5.5
-\]
+$$
 
 因此一个最终 Mosaic sample 可以显著增加：
 
@@ -317,15 +317,15 @@ sy = 0.5
 
 缩放，则：
 
-\[
+$$
 x'_1=s_xx_1,\quad
 y'_1=s_yy_1
-\]
+$$
 
-\[
+$$
 x'_2=s_xx_2,\quad
 y'_2=s_yy_2
-\]
+$$
 
 得：
 
@@ -348,9 +348,9 @@ dy = 0
 
 这就是所有几何增强最基本的原则：
 
-\[
+$$
 \boxed{\text{image transform 与 box transform 必须严格同步}}
-\]
+$$
 
 ---
 
@@ -358,20 +358,20 @@ dy = 0
 
 点：
 
-\[
+$$
 \mathbf p=
 \begin{bmatrix}
 x\\y\\1
 \end{bmatrix}
-\]
+$$
 
 经过 affine：
 
-\[
+$$
 \mathbf p'
 =
 A\mathbf p
-\]
+$$
 
 对 box 的四个角：
 
@@ -384,10 +384,10 @@ A\mathbf p
 
 分别变换，再取：
 
-\[
+$$
 x'_{\min},y'_{\min},
 x'_{\max},y'_{\max}
-\]
+$$
 
 作为新的 axis-aligned bounding box。
 
@@ -446,15 +446,15 @@ context diversity
 
 面积：
 
-\[
+$$
 4800\rightarrow1200
-\]
+$$
 
 缩小为原来的：
 
-\[
+$$
 0.5^2=0.25
-\]
+$$
 
 因此 Mosaic 不只是：
 
@@ -488,11 +488,11 @@ SanitizeBoundingBoxes
 
 这说明：
 
-\[
+$$
 N_{\text{after Mosaic}}
 \neq
 \sum N_{\text{source}}
-\]
+$$
 
 一些目标会被裁掉或过滤。
 
@@ -569,30 +569,30 @@ mosaic_prob: 0.5
 
 MixUp 的经典形式：
 
-\[
+$$
 \tilde x
 =
 \lambda x_i
 +(1-\lambda)x_j
-\]
+$$
 
 分类任务通常还会：
 
-\[
+$$
 \tilde y
 =
 \lambda y_i
 +(1-\lambda)y_j
-\]
+$$
 
 目标检测则不能只混一个类别标签。
 
 因为每张图都有一个 object set：
 
-\[
+$$
 Y_i=
 \{(b_k,c_k)\}
-\]
+$$
 
 所以 DEIMv2 要把两边的：
 
@@ -683,12 +683,12 @@ D ↔ C
 
 当前逻辑等价于：
 
-\[
+$$
 X_i'
 =
 \beta X_i
 +(1-\beta)X_{i-1}
-\]
+$$
 
 例如：
 
@@ -735,9 +735,9 @@ D: 9 boxes
 
 即：
 
-\[
+$$
 Y'_A=Y_A\cup Y_D
-\]
+$$
 
 当前实现会 `torch.cat`：
 
@@ -824,15 +824,15 @@ Q = 300
 
 理论 positive utilization：
 
-\[
+$$
 20/300=6.67\%
-\]
+$$
 
 变成：
 
-\[
+$$
 38/300=12.67\%
-\]
+$$
 
 所以 Mosaic 与 MixUp 可以叠加 densification。
 
@@ -860,9 +860,9 @@ MixUp 命中后
 
 因此：
 
-\[
+$$
 \boxed{\text{MixUp 与 CopyBlend 默认是互斥式选择，而不是同 batch 串行叠加}}
-\]
+$$
 
 这是只看 YAML 很容易错过的源码细节。
 
@@ -1101,41 +1101,41 @@ W,H
 
 则像素中心：
 
-\[
+$$
 c_x^{px}=c_xW
-\]
+$$
 
-\[
+$$
 c_y^{px}=c_yH
-\]
+$$
 
 宽高：
 
-\[
+$$
 w^{px}=wW
-\]
+$$
 
-\[
+$$
 h^{px}=hH
-\]
+$$
 
 patch 边界：
 
-\[
+$$
 x_1=c_x^{px}-w^{px}/2
-\]
+$$
 
-\[
+$$
 y_1=c_y^{px}-h^{px}/2
-\]
+$$
 
-\[
+$$
 x_2=c_x^{px}+w^{px}/2
-\]
+$$
 
-\[
+$$
 y_2=c_y^{px}+h^{px}/2
-\]
+$$
 
 最终还要 clip 到图像边界。
 
@@ -1228,13 +1228,13 @@ r
 
 教学上可以理解为裁剪区域可能向外扩：
 
-\[
+$$
 \Delta w\propto rw
-\]
+$$
 
-\[
+$$
 \Delta h\propto rh
-\]
+$$
 
 具体上下左右如何扩、怎样 clip，以你本地 `BatchImageCollateFunction` 的实际实现为准。
 
@@ -1279,12 +1279,12 @@ copyblend_type='blend'
 
 对目标区域：
 
-\[
+$$
 P_{\text{out}}
 =
 \beta P_{\text{dst}}
 +(1-\beta)P_{\text{src}}
-\]
+$$
 
 即：
 
@@ -1453,25 +1453,25 @@ p_copy = 0.5
 
 则理论上：
 
-\[
+$$
 P(\text{MixUp})=0.5
-\]
+$$
 
 CopyBlend 只有 MixUp 没触发后才有机会：
 
-\[
+$$
 P(\text{CopyBlend})
 =
 (1-0.5)\times0.5
 =
 0.25
-\]
+$$
 
 都不发生：
 
-\[
+$$
 0.5\times0.5=0.25
-\]
+$$
 
 这是一个非常重要的概率细节。
 
@@ -1849,15 +1849,15 @@ iou_order_alpha: 4.0
 
 不能直接断言：
 
-\[
+$$
 \text{cost}=\text{cost}-4\cdot IoU
-\]
+$$
 
 或：
 
-\[
+$$
 IoU^4
-\]
+$$
 
 具体公式必须去当前：
 
@@ -1972,19 +1972,19 @@ Q = 300
 
 positive ratio：
 
-\[
+$$
 35/300
 \approx
 11.7\%
-\]
+$$
 
 而原始平均：
 
-\[
+$$
 5.5/300
 \approx
 1.83\%
-\]
+$$
 
 这是一个示意例子，但它非常直观地展示了 Dense O2O 的目标。
 
@@ -2013,9 +2013,9 @@ CopyBlend 成功加入：
 
 positive ratio：
 
-\[
+$$
 21/300=7\%
-\]
+$$
 
 它没有 MixUp 那么激进地把整套 target union 进来，但视觉扰动也更局部。
 
@@ -2053,16 +2053,16 @@ positive ratio：
 
 Dense O2O 的目标不是：
 
-\[
+$$
 \max N_{\text{GT}}
-\]
+$$
 
 而是：
 
-\[
+$$
 \max
 \text{useful O2O supervision}
-\]
+$$
 
 ---
 

@@ -1,4 +1,5 @@
 # DEIMv2 源码课程 · 第 11 课
+
 # DFINETransformer Decoder——Query 真正开始检测目标
 
 > 本课从第 10 课的 `HybridEncoder` 输出继续，目标是把 `deim_dfine_x` 中 **8400 个多尺度空间位置如何变成 300 个 Object Queries，再经过 6 层 Decoder 逐步变成类别和边界框** 完整讲清楚。
@@ -111,9 +112,9 @@ P5 [B,384,20,20]
 
 ### P3
 
-\[
+$$
 80	imes80=6400
-\]
+$$
 
 ```text
 [B,384,80,80]
@@ -122,9 +123,9 @@ P5 [B,384,20,20]
 
 ### P4
 
-\[
+$$
 40	imes40=1600
-\]
+$$
 
 ```text
 [B,384,40,40]
@@ -133,9 +134,9 @@ P5 [B,384,20,20]
 
 ### P5
 
-\[
+$$
 20	imes20=400
-\]
+$$
 
 ```text
 [B,384,20,20]
@@ -144,9 +145,9 @@ P5 [B,384,20,20]
 
 然后沿 token 维拼接：
 
-\[
+$$
 6400+1600+400=8400
-\]
+$$
 
 得到：
 
@@ -255,17 +256,17 @@ DFINETransformer 不只保存：
 
 对于某层 H×W 网格，中心位置可以理解为：
 
-\[
-c_x=rac{x+0.5}{W},
+$$
+c_x=\frac{x+0.5}{W},
 \qquad
-c_y=rac{y+0.5}{H}
-\]
+c_y=\frac{y+0.5}{H}
+$$
 
 例如 80×80 左上角第一个 cell：
 
-\[
-c_x=c_y=rac{0.5}{80}=0.00625
-\]
+$$
+c_x=c_y=\frac{0.5}{80}=0.00625
+$$
 
 加 `0.5` 是因为我们取的是 grid cell 中心，而不是左上边界。
 
@@ -283,29 +284,29 @@ c_x=c_y=rac{0.5}{80}=0.00625
 
 如果直接：
 
-\[
+$$
 p' = p+\Delta
-\]
+$$
 
 很容易越界。
 
 DETR 系列常用：
 
-\[
-z=\sigma^{-1}(p)=\lograc{p}{1-p}
-\]
+$$
+z=\sigma^{-1}(p)=\log\frac{p}{1-p}
+$$
 
 然后：
 
-\[
+$$
 z'=z+\Delta
-\]
+$$
 
 最后：
 
-\[
+$$
 p'=\sigma(z')
-\]
+$$
 
 这样最终天然回到：
 
@@ -315,25 +316,25 @@ p'=\sigma(z')
 
 例如：
 
-\[
+$$
 p=0.2
-\]
+$$
 
-\[
-\sigma^{-1}(0.2)pprox-1.386
-\]
+$$
+\sigma^{-1}(0.2)\approx-1.386
+$$
 
 若：
 
-\[
+$$
 \Delta=0.5
-\]
+$$
 
 则：
 
-\[
-p'=\sigma(-0.886)pprox0.292
-\]
+$$
+p'=\sigma(-0.886)\approx0.292
+$$
 
 这就是后面 iterative refinement 的核心数学工具。
 
@@ -831,9 +832,9 @@ nhead = 8
 
 每个 head：
 
-\[
-d_h=rac{384}{8}=48
-\]
+$$
+d_h=\frac{384}{8}=48
+$$
 
 概念 shape：
 
@@ -851,15 +852,15 @@ V [B,8,300,48]
 
 即：
 
-\[
+$$
 90,000
-\]
+$$
 
 8 heads：
 
-\[
+$$
 720,000
-\]
+$$
 
 个 query-query attention scores / image。
 
@@ -881,19 +882,19 @@ Image memory：
 
 如果做普通 dense cross-attention：
 
-\[
+$$
 300	imes8400
 =
 2,520,000
-\]
+$$
 
 每个 head 的 query-position pairs。
 
 8 heads：
 
-\[
+$$
 20,160,000
-\]
+$$
 
 所以 D-FINE 使用第 7 课已经学过的：
 
@@ -953,19 +954,19 @@ query × head
 
 总共采样：
 
-\[
+$$
 3+6+3=12
-\]
+$$
 
 个位置。
 
 正常 300 queries、8 heads：
 
-\[
+$$
 300	imes8	imes12
 =
 28,800
-\]
+$$
 
 个 query-head-sampling locations / decoder layer / image。
 
@@ -1091,13 +1092,13 @@ Learned Gate
 
 通用门控形式可写成：
 
-\[
+$$
 g=\sigma(f(x,y))
-\]
+$$
 
-\[
+$$
 z=g\odot x+(1-g)\odot y
-\]
+$$
 
 具体实现以当前源码为准。
 
@@ -1186,19 +1187,19 @@ Iterative Refinement
 
 设第 i 层 reference：
 
-\[
+$$
 r_i
-\]
+$$
 
 网络预测修正量：
 
-\[
+$$
 \Delta_i
-\]
+$$
 
 则：
 
-\[
+$$
 r_{i+1}
 =
 \sigma
@@ -1206,8 +1207,9 @@ r_{i+1}
 \sigma^{-1}(r_i)
 +
 \Delta_i
-ight)
-\]
+
+\right)
+$$
 
 例如：
 
@@ -1215,9 +1217,9 @@ r_{i+1}
 cx = 0.40
 ```
 
-\[
-\sigma^{-1}(0.4)pprox-0.405
-\]
+$$
+\sigma^{-1}(0.4)\approx-0.405
+$$
 
 如果：
 
@@ -1227,13 +1229,13 @@ cx = 0.40
 
 则：
 
-\[
+$$
 -0.405+0.2=-0.205
-\]
+$$
 
-\[
-\sigma(-0.205)pprox0.449
-\]
+$$
+\sigma(-0.205)\approx0.449
+$$
 
 于是：
 
@@ -1341,9 +1343,9 @@ reg_max = 32
 
 每个方向有：
 
-\[
+$$
 32+1=33
-\]
+$$
 
 个 distribution bins。
 
@@ -1358,9 +1360,9 @@ bottom
 
 所以：
 
-\[
+$$
 4	imes33=132
-\]
+$$
 
 bbox distribution head 会输出：
 
@@ -2014,21 +2016,21 @@ O2O Positive Matches
 
 Self-Attention：
 
-\[
+$$
 O(Q^2)
-\]
+$$
 
 300：
 
-\[
+$$
 300^2=90,000
-\]
+$$
 
 600：
 
-\[
+$$
 600^2=360,000
-\]
+$$
 
 Query 翻倍，Self-Attention pair 数约变 4 倍。
 
@@ -2967,25 +2969,25 @@ def check(name, x):
 
 # 72. 本课最重要的 Shape 表
 
-| 阶段 | Shape |
-|---|---|
-| P3 | `[B,384,80,80]` |
-| P4 | `[B,384,40,40]` |
-| P5 | `[B,384,20,20]` |
-| Flatten P3 | `[B,6400,384]` |
-| Flatten P4 | `[B,1600,384]` |
-| Flatten P5 | `[B,400,384]` |
-| Memory | `[B,8400,384]` |
-| Encoder logits | `[B,8400,80]` |
-| Encoder boxes | `[B,8400,4]` |
-| Top-K indices | `[B,300]` |
-| Query content | `[B,300,384]` |
-| Initial refs | `[B,300,4]` |
-| Query position | `[B,300,384]` |
-| Decoder feature | `[B,300,384]` |
-| Class logits | `[B,300,80]` |
-| FDR corner logits | `[B,300,132]` |
-| Final boxes | `[B,300,4]` |
+| 阶段              | Shape             |
+| ----------------- | ----------------- |
+| P3                | `[B,384,80,80]` |
+| P4                | `[B,384,40,40]` |
+| P5                | `[B,384,20,20]` |
+| Flatten P3        | `[B,6400,384]`  |
+| Flatten P4        | `[B,1600,384]`  |
+| Flatten P5        | `[B,400,384]`   |
+| Memory            | `[B,8400,384]`  |
+| Encoder logits    | `[B,8400,80]`   |
+| Encoder boxes     | `[B,8400,4]`    |
+| Top-K indices     | `[B,300]`       |
+| Query content     | `[B,300,384]`   |
+| Initial refs      | `[B,300,4]`     |
+| Query position    | `[B,300,384]`   |
+| Decoder feature   | `[B,300,384]`   |
+| Class logits      | `[B,300,80]`    |
+| FDR corner logits | `[B,300,132]`   |
+| Final boxes       | `[B,300,4]`     |
 
 建议把这张表作为第 11 课的速查表。
 
@@ -2993,7 +2995,7 @@ def check(name, x):
 
 # 73. 初学者最容易犯的错误
 
-### 错误 1
+错误 1
 
 ```text
 8400 是 Object Query 数。
@@ -3006,7 +3008,7 @@ def check(name, x):
 300  = object queries
 ```
 
-### 错误 2
+错误 2
 
 ```text
 300 Queries 是 300 个固定 learnable embeddings。
@@ -3020,7 +3022,7 @@ def check(name, x):
 Top-K selected encoder memory
 ```
 
-### 错误 3
+错误 3
 
 ```text
 Query = Bounding Box。
@@ -3033,7 +3035,7 @@ Query Content = 384D feature
 Reference Box = 4D geometry
 ```
 
-### 错误 4
+错误 4
 
 ```text
 Top-K 就是 Hungarian Matching。
@@ -3041,7 +3043,7 @@ Top-K 就是 Hungarian Matching。
 
 完全不同。
 
-### 错误 5
+错误 5
 
 ```text
 Top-K 就是 NMS。
@@ -3049,7 +3051,7 @@ Top-K 就是 NMS。
 
 也不是。Top-K 不做传统 IoU suppression。
 
-### 错误 6
+错误 6
 
 ```text
 Decoder 每层都重新生成 300 Queries。
@@ -3059,7 +3061,7 @@ Decoder 每层都重新生成 300 Queries。
 
 同一组 Object Slots 被逐层更新。
 
-### 错误 7
+错误 7
 
 ```text
 Deformable Attention 仍然看全部 8400 positions。
@@ -3067,7 +3069,7 @@ Deformable Attention 仍然看全部 8400 positions。
 
 它围绕 reference 在多个尺度采样少量位置。
 
-### 错误 8
+错误 8
 
 ```text
 132 = 132 个 Boxes。
@@ -3079,7 +3081,7 @@ Deformable Attention 仍然看全部 8400 positions。
 4 directions × 33 bins
 ```
 
-### 错误 9
+错误 9
 
 ```text
 num_denoising=100 → 训练永远 400 Queries。
@@ -3087,7 +3089,7 @@ num_denoising=100 → 训练永远 400 Queries。
 
 实际 DN 数应以 `dn_meta` 和真实 shape 为准。
 
-### 错误 10
+错误 10
 
 ```text
 detach 后前面的模块就完全不训练。
@@ -3101,48 +3103,30 @@ detach 后前面的模块就完全不训练。
 
 1. 手算：
 
-\[
+$$
 80^2+40^2+20^2
-\]
+$$
 
 为什么得到 8400？
 
 2. 为什么 8400 不是 Object Query 数？
-
 3. `enc_score_head` 输入 `[B,8400,384]`，COCO 下输出是什么 shape？
-
 4. 默认 query selection 怎样从 `[B,8400,80]` 得到 `[B,300]` indices？
-
 5. 为什么必须用同一组 Top-K indices 同时 gather memory、logits 和 boxes？
-
 6. `learn_query_content=False` 时 Query Content 来自哪里？
-
 7. Query Content 和 Reference Box 的职责分别是什么？
-
 8. 为什么 Reference Box 可以动态生成 Query Positional Embedding？
-
 9. `hidden_dim=384,nhead=8`，每个 head dimension 是多少？
-
 10. 300 Queries 的 Self-Attention 有多少 Query Pairs？
-
 11. `[3,6,3]` 表示什么？
-
 12. 300 Queries、8 Heads、12 Sampling Points，每层每张图有多少 query-head-sampling locations？
-
 13. 为什么 Deformable Attention 比 300×8400 的 Dense Cross-Attention 更适合实时检测？
-
 14. 写出 Iterative Refinement 的核心公式。
-
 15. 为什么 Top-K Query Selection 和 Hungarian Matching 完全不同？
-
 16. `reg_max=32` 时为什么 bbox distribution head 输出 132？
-
 17. 为什么 Training 时 Query 数可能大于 300？
-
 18. 为什么 Inference 没有 Denoising Queries？
-
 19. 为什么 Encoder Proposal Stage 需要自己的监督？
-
 20. 解释：
 
 ```text
@@ -3156,23 +3140,23 @@ better reference
 
 # 75. 练习答案摘要
 
-### 1
+1、
 
-\[
+$$
 80^2+40^2+20^2
 =
 6400+1600+400
 =
 8400
-\]
+$$
 
-### 3
+3、
 
 ```text
 [B,8400,80]
 ```
 
-### 4
+4、
 
 先：
 
@@ -3200,7 +3184,7 @@ topk(K=300)
 
 indices。
 
-### 6
+6、
 
 来自：
 
@@ -3208,19 +3192,19 @@ indices。
 Top-K selected encoder memory
 ```
 
-### 9
+9、
 
-\[
+$$
 384/8=48
-\]
+$$
 
-### 10
+10、
 
-\[
+$$
 300^2=90,000
-\]
+$$
 
-### 11
+11、
 
 三个 level 每个 head 分别采样：
 
@@ -3232,32 +3216,33 @@ Top-K selected encoder memory
 
 总：
 
-\[
+$$
 12
-\]
+$$
 
-### 12
+12、
 
-\[
+$$
 300	imes8	imes12=28,800
-\]
+$$
 
-### 14
+14、
 
-\[
+$$
 r_{i+1}
 =
 \sigma
 \left(
 \sigma^{-1}(r_i)+\Delta_i
-ight)
-\]
 
-### 16
+\right)
+$$
 
-\[
+16、
+
+$$
 4	imes(32+1)=132
-\]
+$$
 
 即：
 
@@ -3267,11 +3252,11 @@ r_{i+1}
 每方向 33 个 distribution logits
 ```
 
-### 17
+17、
 
 训练还会加入 Denoising Queries。
 
-### 18
+18、
 
 Inference 没有 GT，无法构造 GT-based Denoising Group。
 

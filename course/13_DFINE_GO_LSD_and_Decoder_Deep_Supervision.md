@@ -1,4 +1,5 @@
 # DEIMv2 源码课程 · 第 13 课
+
 # D-FINE 的 GO-LSD 与 Decoder 多层监督
 
 > 本课承接第 12 课 FDR。
@@ -680,26 +681,26 @@ neighbor relations
 
 Teacher distribution：
 
-\[
+$$
 q(n)
-\]
+$$
 
 Student distribution：
 
-\[
+$$
 p(n)
-\]
+$$
 
 核心蒸馏项：
 
-\[
+$$
 D_{KL}(q\|p)
 =
 \sum_n
 q(n)
 \log
 \frac{q(n)}{p(n)}
-\]
+$$
 
 源码使用：
 
@@ -762,19 +763,19 @@ T = 5
 
 Student：
 
-\[
+$$
 p_T
 =
 softmax(z_s/T)
-\]
+$$
 
 Teacher：
 
-\[
+$$
 q_T
 =
 softmax(z_t/T)
-\]
+$$
 
 当：
 
@@ -852,9 +853,9 @@ Softmax
 
 乘：
 
-\[
+$$
 T^2
-\]
+$$
 
 用于补偿温度缩放导致的梯度幅度变化，使不同 T 下蒸馏梯度更合理。
 
@@ -946,12 +947,12 @@ Query ↔ GT
 
 因此可以计算：
 
-\[
+$$
 IoU(
 pred\_box,
 GT
 )
-\]
+$$
 
 IoU 越高：
 
@@ -1185,11 +1186,11 @@ pred_corners
 
 flatten：
 
-\[
+$$
 2\times300\times4
 =
 2400
-\]
+$$
 
 所以：
 
@@ -1351,7 +1352,7 @@ weight = teacher confidence
 
 对任意 distribution：
 
-\[
+$$
 L_k
 =
 w_k
@@ -1362,7 +1363,7 @@ q_k^T
 \|
 p_k^T
 \right)
-\]
+$$
 
 其中：
 
@@ -1373,15 +1374,15 @@ p = Student
 
 matched：
 
-\[
+$$
 w_k = IoU_k
-\]
+$$
 
 unmatched：
 
-\[
+$$
 w_k = Conf_k
-\]
+$$
 
 但这还没有结束。
 
@@ -1443,15 +1444,15 @@ K_u = unmatched 数量
 
 论文为 matched / unmatched 设计了与：
 
-\[
+$$
 \sqrt{K_m}
-\]
+$$
 
 和：
 
-\[
+$$
 \sqrt{K_u}
-\]
+$$
 
 相关的组级权重。
 
@@ -1529,16 +1530,16 @@ K_u = 290
 
 原始比例：
 
-\[
+$$
 290/10=29
-\]
+$$
 
 平方根：
 
-\[
+$$
 \sqrt{290}/\sqrt{10}
 \approx5.39
-\]
+$$
 
 所以 unmatched 仍然因为数量多而有更大整体权重，但差距从：
 
@@ -1727,7 +1728,7 @@ M_5 = Layer 5 matched indices
 
 GO-LSD 的 localization union：
 
-\[
+$$
 M_{global}
 =
 M_0
@@ -1737,7 +1738,7 @@ M_1
 \cdots
 \cup
 M_5
-\]
+$$
 
 这就是论文所说的：
 
@@ -1759,7 +1760,7 @@ GIoU
 
 Hungarian cost：
 
-\[
+$$
 C
 =
 \lambda_{cls}C_{cls}
@@ -1767,7 +1768,7 @@ C
 \lambda_{L1}C_{L1}
 +
 \lambda_{GIoU}C_{GIoU}
-\]
+$$
 
 随着 Decoder refinement：
 
@@ -2178,9 +2179,9 @@ soft teacher target
 
 FGL：
 
-\[
+$$
 L_{FGL}
-\]
+$$
 
 要求：
 
@@ -2191,9 +2192,9 @@ distribution 的期望和形状
 
 DDF：
 
-\[
+$$
 L_{DDF}
-\]
+$$
 
 要求：
 
@@ -2204,19 +2205,19 @@ L_{DDF}
 
 总 localization loss 中还包括：
 
-\[
+$$
 L_{bbox}
-\]
+$$
 
 和：
 
-\[
+$$
 L_{giou}
-\]
+$$
 
 因此可以理解为：
 
-\[
+$$
 L_{loc}
 =
 \lambda_1L_{bbox}
@@ -2226,7 +2227,7 @@ L_{loc}
 \lambda_3L_{FGL}
 +
 \lambda_4L_{DDF}
-\]
+$$
 
 DEIM 还会与其 classification/MAL 等 loss 一起构成总训练目标。
 
@@ -3456,17 +3457,17 @@ T = 5
 
 温度补偿后：
 
-\[
+$$
 T^2 = 25
-\]
+$$
 
 该项：
 
-\[
+$$
 0.90\times25\times0.08
 =
 1.8
-\]
+$$
 
 另一个 unmatched edge：
 
@@ -3477,11 +3478,11 @@ Teacher confidence = 0.15
 
 则：
 
-\[
+$$
 0.15\times25\times0.08
 =
 0.3
-\]
+$$
 
 同样 KL 差异下：
 
@@ -3503,11 +3504,11 @@ confidence = 0.85
 
 则：
 
-\[
+$$
 0.85\times25\times0.08
 =
 1.7
-\]
+$$
 
 这意味着：
 
@@ -4610,23 +4611,23 @@ KL(student, teacher)
 
 Student layer \(l\)：
 
-\[
+$$
 P_l(n)
 =
 softmax(z_l/T)
-\]
+$$
 
 Final teacher：
 
-\[
+$$
 P_L(n)
 =
 softmax(z_L/T)
-\]
+$$
 
 单个 localization distribution 的 distillation：
 
-\[
+$$
 D_k
 =
 T^2
@@ -4636,29 +4637,29 @@ P_L^k
 \|
 P_l^k
 )
-\]
+$$
 
 matched：
 
-\[
+$$
 w_k^{m}
 =
 IoU_k
-\]
+$$
 
 unmatched：
 
-\[
+$$
 w_k^{u}
 =
 Conf_k
-\]
+$$
 
 再对 matched / unmatched group 进行数量平衡。
 
 论文形式可概括为：
 
-\[
+$$
 L_{DDF}
 =
 T^2
@@ -4672,7 +4673,7 @@ KL(P_l^k,P_L^k)
 \beta_k
 KL(P_l^k,P_L^k)
 \right]
-\]
+$$
 
 其中：
 
@@ -4695,18 +4696,18 @@ sqrt-count balancing
 
 # 125. 本课 Shape 速查表
 
-| Tensor | Shape | 含义 |
-|---|---:|---|
-| Student `pred_corners` | `[B,Q,132]` | 浅层 FDR logits |
-| Teacher `teacher_corners` | `[B,Q,132]` | 最终层 FDR logits |
-| Reshaped Student | `[B*Q*4,33]` | 每条边一个分布 |
-| Reshaped Teacher | `[B*Q*4,33]` | Teacher edge distribution |
-| `teacher_logits` | `[B,Q,C]` | 最终层分类 logits |
-| Teacher confidence | `[B,Q]` | unmatched quality weight |
-| Query match mask | `[B,Q]` | matched / unmatched |
-| Edge match mask | `[B*Q*4]` | 四边展开后的 mask |
-| Per-edge KL | `[B*Q*4]` | 每条边的蒸馏损失 |
-| `loss_ddf` | scalar | DDF 总损失 |
+| Tensor                     |          Shape | 含义                      |
+| -------------------------- | -------------: | ------------------------- |
+| Student`pred_corners`    |  `[B,Q,132]` | 浅层 FDR logits           |
+| Teacher`teacher_corners` |  `[B,Q,132]` | 最终层 FDR logits         |
+| Reshaped Student           | `[B*Q*4,33]` | 每条边一个分布            |
+| Reshaped Teacher           | `[B*Q*4,33]` | Teacher edge distribution |
+| `teacher_logits`         |    `[B,Q,C]` | 最终层分类 logits         |
+| Teacher confidence         |      `[B,Q]` | unmatched quality weight  |
+| Query match mask           |      `[B,Q]` | matched / unmatched       |
+| Edge match mask            |    `[B*Q*4]` | 四边展开后的 mask         |
+| Per-edge KL                |    `[B*Q*4]` | 每条边的蒸馏损失          |
+| `loss_ddf`               |         scalar | DDF 总损失                |
 
 ---
 
@@ -4750,15 +4751,15 @@ GT supervision
 
 # 127. 本课练习
 
-### 练习 1
+练习 1
 
 为什么普通 Auxiliary Loss 不等于 GO-LSD？
 
-### 练习 2
+练习 2
 
 `deim_dfine_x` 有 6 个 Decoder layers。普通 `aux_outputs` 有几个 Student layers？
 
-### 练习 3
+练习 3
 
 为什么：
 
@@ -4772,9 +4773,7 @@ shape 是：
 [B,300,132]
 ```
 
-？
-
-### 练习 4
+练习 4
 
 为什么 Criterion 要把它 reshape 成：
 
@@ -4782,51 +4781,47 @@ shape 是：
 [B*300*4,33]
 ```
 
-？
-
-### 练习 5
+练习 5
 
 Teacher 为什么必须 `.detach()`？
 
-### 练习 6
+练习 6
 
 Temperature \(T>1\) 会怎样改变 distribution？
 
-### 练习 7
+练习 7
 
 为什么 KL 前要乘：
 
-\[
+$$
 T^2
-\]
+$$
 
-？
-
-### 练习 8
+练习 8
 
 DDF 为什么把 matched / unmatched 分开？
 
-### 练习 9
+练习 9
 
 Matched prediction 为什么用 IoU 加权？
 
-### 练习 10
+练习 10
 
 Unmatched prediction 为什么用 Teacher classification confidence 加权？
 
-### 练习 11
+练习 11
 
 为什么 matched query 不统一使用 classification confidence？
 
-### 练习 12
+练习 12
 
 为什么 GO-LSD 还要学习 unmatched predictions？
 
-### 练习 13
+练习 13
 
 为什么 unmatched distillation 不会自动破坏 O2O classification？
 
-### 练习 14
+练习 14
 
 什么是跨层：
 
@@ -4834,51 +4829,49 @@ Unmatched prediction 为什么用 Teacher classification confidence 加权？
 global union set
 ```
 
-？
-
-### 练习 15
+练习 15
 
 为什么不同 Decoder Layer 的 Hungarian matches 可能不同？
 
-### 练习 16
+练习 16
 
 为什么 localization 可以使用 union set，但 classification 仍应保持 O2O？
 
-### 练习 17
+练习 17
 
 为什么用：
 
-\[
+$$
 \sqrt{K}
-\]
+$$
 
 而不是直接用 \(K\) 做 matched/unmatched group weighting 能缓和数量失衡？
 
-### 练习 18
+练习 18
 
 `loss_fgl` 和 `loss_ddf` 分别是谁教谁？
 
-### 练习 19
+练习 19
 
 FDR 与 GO-LSD 为什么天然互补？
 
-### 练习 20
+练习 20
 
 GO-LSD Teacher 和 EMA Teacher 有什么区别？
 
-### 练习 21
+练习 21
 
 为什么 GO-LSD 几乎不增加推理成本？
 
-### 练习 22
+练习 22
 
 `teacher_logits` 是否直接作为 localization KL target？为什么？
 
-### 练习 23
+练习 23
 
 如果 Student distribution 已经与 Teacher 完全相同，DDF 应该是多少？
 
-### 练习 24
+练习 24
 
 为什么只蒸馏最终 bbox `[B,Q,4]` 会丢失一部分 FDR 知识？
 
@@ -4886,7 +4879,7 @@ GO-LSD Teacher 和 EMA Teacher 有什么区别？
 
 # 128. 练习答案摘要
 
-### 1
+1、
 
 Auxiliary Loss：
 
@@ -4900,7 +4893,7 @@ GO-LSD：
 final layer distribution → shallow layer distribution
 ```
 
-### 2
+2、
 
 ```text
 5
@@ -4908,45 +4901,45 @@ final layer distribution → shallow layer distribution
 
 即 Layer 0–4。
 
-### 3
+3、
 
-\[
+$$
 4(32+1)=132
-\]
+$$
 
-### 4
+4、
 
 为了把每个 Query 的四条边拆成独立的 33-bin distributions。
 
-### 5
+5、
 
 Teacher 只提供目标，不应被 DDF 梯度拉向 Student。
 
-### 6
+6、
 
 使 distribution 更平滑，暴露更多 soft relative information。
 
-### 8
+8、
 
 因为两组的监督可靠性来源和数量规模都不同。
 
-### 9
+9、
 
 matched 有明确 GT，因此 IoU 能直接衡量 localization quality。
 
-### 10
+10、
 
 unmatched 没有对应 GT，Teacher confidence 是可用的可靠性 proxy。
 
-### 14
+14、
 
 所有 Decoder layers 的 localization matching indices 的联合信息。
 
-### 16
+16、
 
 分类必须维护一个 GT 对一个 Query 的 set prediction；localization knowledge transfer 可以更宽松。
 
-### 18
+18、
 
 ```text
 FGL:
@@ -4956,15 +4949,15 @@ DDF:
 Final refined distribution → shallow distribution
 ```
 
-### 20
+20、
 
 GO-LSD Teacher 是同一次 forward 的最终 Decoder Layer；EMA 是整个模型参数的移动平均副本。
 
-### 21
+21、
 
 训练期 loss 和 matching 在推理时都移除，不需要额外 Teacher forward。
 
-### 23
+23、
 
 理论上：
 
@@ -4972,7 +4965,7 @@ GO-LSD Teacher 是同一次 forward 的最终 Decoder Layer；EMA 是整个模�
 0
 ```
 
-### 24
+24、
 
 因为完整 distribution 还编码峰值形状、邻近 bins 概率和 localization uncertainty。
 

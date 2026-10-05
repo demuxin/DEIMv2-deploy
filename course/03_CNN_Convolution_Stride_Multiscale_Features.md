@@ -1,21 +1,18 @@
 # 第 3 课：CNN、卷积、Stride 与多尺度特征
 
-> **课程定位**：DEIMv2 从零到源码 · 第 3 / 24 课\
-> **本课目标**：从零理解 CNN 的卷积运算、kernel / stride / padding /
-> dilation /
-> groups、通道变化、下采样、参数量、计算量与感受野，并最终能够从
-> `640×640` 输入手算 HGNetv2/检测 Backbone 的多尺度输出 shape。\
-> **重点连接**：`deim_dfine_x → HGNetv2-B5 → HybridEncoder`。\
-> **学习原则**：这一课不是背 CNN 名词，而是要做到"看到一个
-> `Conv2d`，能立即推导输出 shape、参数量和它对空间分辨率做了什么"。
+> **课程定位**：DEIMv2 从零到源码 · 第 3 / 24 课
+> **本课目标**：从零理解 CNN 的卷积运算、kernel / stride / padding / dilation / groups、通道变化、下采样、参数量、计算量与感受野，并最终能够从
+> `640×640` 输入手算 HGNetv2/检测 Backbone 的多尺度输出 shape。
+> **重点连接**：`deim_dfine_x → HGNetv2-B5 → HybridEncoder`。
+> **学习原则**：这一课不是背 CNN 名词，而是要做到"看到一个 `Conv2d`，能立即推导输出 shape、参数量和它对空间分辨率做了什么"。
 
-------------------------------------------------------------------------
+---
 
 # 0. 从第 1、2 课接着走
 
 第 1 课我们建立了总地图：
 
-``` text
+```text
 Image
 [B,3,640,640]
        │
@@ -37,24 +34,23 @@ Bounding Boxes
 
 第 2 课我们已经知道如何把：
 
-``` text
+```text
 [B,C,H,W]
 ```
 
 变成：
 
-``` text
+```text
 [B,HW,C]
 ```
 
 但还有一个非常重要的问题没有解决：
 
-> `[B,3,640,640]` 到底怎样变成
-> `[B,C,80,80]`、`[B,C,40,40]`、`[B,C,20,20]`？
+> `[B,3,640,640]` 到底怎样变成`[B,C,80,80]`、`[B,C,40,40]`、`[B,C,20,20]`？
 
 答案主要就在：
 
-``` text
+```text
 Convolution
 +
 Stride
@@ -64,31 +60,35 @@ Hierarchical Backbone
 
 这一课解决这件事。
 
-------------------------------------------------------------------------
+---
 
 # 1. CNN 为什么需要卷积？
 
 先假设一张图片：
 
-``` text
+```text
 [3,640,640]
 ```
 
 如果直接把所有像素 flatten：
 
-\[ 3`\times640`{=tex}`\times640`{=tex}=1,228,800 \]
+$$
+3\times640\times640=1,228,800
+$$
 
 得到超过 120 万维输入。
 
 如果直接接一个全连接层：
 
-``` text
+```text
 1,228,800 → 1024
 ```
 
 仅权重就需要：
 
-\[ 1,228,800`\times1024`{=tex} = 1,258,291,200 \]
+$$
+1,228,800\times1024 = 1,258,291,200
+$$
 
 约 **12.58 亿个参数**。
 
@@ -100,13 +100,13 @@ Hierarchical Backbone
 
 例如一个：
 
-``` text
+```text
 3×3 convolution kernel
 ```
 
 只关注当前位置周围的局部区域。
 
-------------------------------------------------------------------------
+---
 
 # 2. 最简单的二维卷积
 
@@ -114,31 +114,31 @@ Hierarchical Backbone
 
 假设输入：
 
-``` text
+```text
 5 × 5
 ```
 
 kernel：
 
-``` text
+```text
 3 × 3
 ```
 
 stride：
 
-``` text
+```text
 1
 ```
 
 padding：
 
-``` text
+```text
 0
 ```
 
 kernel 第一次覆盖：
 
-``` text
+```text
 input
 
 ┌───────┐ . .
@@ -152,7 +152,7 @@ input
 
 然后向右移动一格：
 
-``` text
+```text
 . ┌───────┐ .
 . │ x x x │ .
 . │ x x x │ .
@@ -162,11 +162,13 @@ input
 
 对于每个位置，kernel 与局部像素做：
 
-\[ y = `\sum`{=tex}*{i,j}x*{ij}w\_{ij}+b \]
+$$
+y = \sum_{i,j}x_{ij}w_{ij}+b
+$$
 
 这就是一个输出值。
 
-------------------------------------------------------------------------
+---
 
 # 3. 卷积输出尺寸公式
 
@@ -174,13 +176,13 @@ input
 
 对于一维空间尺寸：
 
-\[ O= `\left`{=tex}`\lfloor`{=tex} `\frac{
-I+2P-D(K-1)-1
-}{S}`{=tex} +1 `\right`{=tex}`\rfloor`{=tex} \]
+$$
+O= \left\lfloor \frac{ I+2P-D(K-1)-1 }{S} +1 \right\rfloor
+$$
 
 其中：
 
-``` text
+```text
 I = Input size
 K = Kernel size
 S = Stride
@@ -191,7 +193,7 @@ O = Output size
 
 二维情况分别对：
 
-``` text
+```text
 Height
 Width
 ```
@@ -200,21 +202,21 @@ Width
 
 所以：
 
-\[ H\_{out} = `\left`{=tex}`\lfloor`{=tex} `\frac{
-H_{in}+2P_h-D_h(K_h-1)-1
-}{S_h}`{=tex} +1 `\right`{=tex}`\rfloor`{=tex} \]
+$$
+H_{out} = \left\lfloor \frac{ H_{in}+2P_h-D_h(K_h-1)-1 }{S_h} +1 \right\rfloor
+$$
 
-\[ W\_{out} = `\left`{=tex}`\lfloor`{=tex} `\frac{
-W_{in}+2P_w-D_w(K_w-1)-1
-}{S_w}`{=tex} +1 `\right`{=tex}`\rfloor`{=tex} \]
+$$
+W_{out} = \left\lfloor \frac{ W_{in}+2P_w-D_w(K_w-1)-1 }{S_w} +1 \right\rfloor
+$$
 
-------------------------------------------------------------------------
+---
 
 # 4. 第一次手算：5×5 输入 + 3×3 卷积
 
 参数：
 
-``` text
+```text
 I = 5
 K = 3
 S = 1
@@ -224,17 +226,21 @@ D = 1
 
 代入：
 
-\[ O= `\frac{5-1(3-1)-1}{1}`{=tex}+1 \]
+$$
+O= \frac{5-1(3-1)-1}{1}+1
+$$
 
-# \[
+$$
+5-2-1+1
+$$
 
-5-2-1+1 \]
-
-\[ =3 \]
+$$
+=3
+$$
 
 所以：
 
-``` text
+```text
 5×5
 ↓ Conv3×3, stride=1, padding=0
 3×3
@@ -242,19 +248,19 @@ D = 1
 
 直觉上：
 
-``` text
+```text
 3×3 kernel
 ```
 
 在 5×5 上横向可以放 3 次，纵向也可以放 3 次。
 
-------------------------------------------------------------------------
+---
 
 # 5. Padding 为什么存在？
 
 现在仍然：
 
-``` text
+```text
 Input = 5×5
 Kernel = 3×3
 Stride = 1
@@ -262,7 +268,7 @@ Stride = 1
 
 但：
 
-``` text
+```text
 Padding = 1
 ```
 
@@ -270,25 +276,29 @@ Padding = 1
 
 原：
 
-``` text
+```text
 5×5
 ```
 
 逻辑上变成：
 
-``` text
+```text
 7×7
 ```
 
 代入：
 
-\[ O= `\frac{5+2(1)-3}{1}`{=tex}+1 \]
+$$
+O= \frac{5+2(1)-3}{1}+1
+$$
 
-\[ =5 \]
+$$
+=5
+$$
 
 于是：
 
-``` text
+```text
 5×5
 ↓ 3×3, stride=1, padding=1
 5×5
@@ -298,7 +308,7 @@ Padding = 1
 
 > **保持空间尺寸不变的 3×3 convolution。**
 
-------------------------------------------------------------------------
+---
 
 # 6. Stride 是什么？
 
@@ -308,44 +318,44 @@ Stride 表示：
 
 如果：
 
-``` text
+```text
 stride = 1
 ```
 
 kernel：
 
-``` text
+```text
 一步一步移动
 ```
 
 如果：
 
-``` text
+```text
 stride = 2
 ```
 
 则：
 
-``` text
+```text
 每次跨两个位置
 ```
 
 因此 stride=2 常常会让：
 
-``` text
+```text
 H → H/2
 W → W/2
 ```
 
 也就是下采样。
 
-------------------------------------------------------------------------
+---
 
 # 7. 最重要的 640 → 320
 
 假设：
 
-``` python
+```python
 nn.Conv2d(
     in_channels=3,
     out_channels=32,
@@ -357,29 +367,30 @@ nn.Conv2d(
 
 输入：
 
-``` text
+```text
 [B,3,640,640]
 ```
 
 计算：
 
-\[ O = `\left`{=tex}`\lfloor`{=tex} `\frac{640+2-3}{2}`{=tex}+1
-`\right`{=tex}`\rfloor`{=tex} \]
+$$
+O = \left\lfloor \frac{640+2-3}{2}+1
+\right\rfloor
+$$
 
-# \[
-
-`\left`{=tex}`\lfloor
-319.5`{=tex}+1 `\right`{=tex}`\rfloor`{=tex} = 320 \]
+$$
+\left\lfloor 319.5+1 \right\rfloor = 320
+$$
 
 输出：
 
-``` text
+```text
 [B,32,320,320]
 ```
 
 注意这里同时发生两件事：
 
-``` text
+```text
 Channel:
 3 → 32
 
@@ -389,20 +400,20 @@ Spatial:
 
 这两个变化必须分开理解。
 
-------------------------------------------------------------------------
+---
 
 # 8. 为什么 channel 变多，而空间变小？
 
 这是 CNN Backbone 中非常常见的设计：
 
-``` text
+```text
 空间分辨率逐渐下降
 Channel 数逐渐增加
 ```
 
 例如：
 
-``` text
+```text
 [B,3,640,640]
       ↓
 [B,32,320,320]
@@ -418,7 +429,7 @@ Channel 数逐渐增加
 
 直觉上：
 
-``` text
+```text
 浅层：
 空间信息丰富
 每个位置描述比较简单
@@ -437,13 +448,13 @@ Channel 数逐渐增加
 这只是理解 CNN 的直觉，不意味着 channel
 越多就一定"语义越高级"；真正能力还取决于网络结构、训练方式、参数等。
 
-------------------------------------------------------------------------
+---
 
 # 9. `Conv2d` 的输入输出 shape
 
 PyTorch：
 
-``` python
+```python
 conv = torch.nn.Conv2d(
     in_channels=3,
     out_channels=64,
@@ -455,19 +466,19 @@ conv = torch.nn.Conv2d(
 
 输入：
 
-``` text
+```text
 [B,3,640,640]
 ```
 
 输出：
 
-``` text
+```text
 [B,64,320,320]
 ```
 
 规律：
 
-``` text
+```text
 Batch
 B
 → 不变
@@ -482,35 +493,36 @@ Height/Width
 
 因此：
 
-\[ \[B,C\_{in},H,W\] `\rightarrow
-[B,C_{out},H',W']`{=tex}\]
+$$
+[B,C_{in},H,W] \rightarrow [B,C_{out},H',W']
+$$
 
-------------------------------------------------------------------------
+---
 
 # 10. 一个卷积 kernel 其实有多深？
 
 假设：
 
-``` text
+```text
 Cin = 3
 K = 3
 ```
 
 一个输出 channel 对应的 kernel 并不是：
 
-``` text
+```text
 3×3
 ```
 
 而是：
 
-``` text
+```text
 3×3×3
 ```
 
 因为它必须同时观察：
 
-``` text
+```text
 R
 G
 B
@@ -520,19 +532,21 @@ B
 
 如果：
 
-``` text
+```text
 Cin = 256
 ```
 
 一个普通 3×3 kernel 实际有：
 
-\[ 256`\times3`{=tex}`\times3`{=tex} \]
+$$
+256\times3\times3
+$$
 
 个权重。
 
 如果输出：
 
-``` text
+```text
 Cout = 512
 ```
 
@@ -540,19 +554,23 @@ Cout = 512
 
 所以普通 Conv2d 权重数：
 
-\[ C\_{out}`\times `{=tex}C\_{in}`\times `{=tex}K_h`\times `{=tex}K_w \]
+$$
+C_{out}\times C_{in}\times K_h\times K_w
+$$
 
 如果有 bias：
 
-\[ Params = C\_{out} (C\_{in}K_hK_w+1) \]
+$$
+Params = C_{out} (C_{in}K_hK_w+1)
+$$
 
-------------------------------------------------------------------------
+---
 
 # 11. 手算卷积参数量
 
 假设：
 
-``` python
+```python
 nn.Conv2d(
     256,
     512,
@@ -563,19 +581,25 @@ nn.Conv2d(
 
 参数量：
 
-\[ 512`\times256`{=tex}`\times3`{=tex}`\times3`{=tex} \]
+$$
+512\times256\times3\times3
+$$
 
 先：
 
-\[ 256`\times9`{=tex}=2304 \]
+$$
+256\times9=2304
+$$
 
 再：
 
-\[ 2304`\times512`{=tex} = 1,179,648 \]
+$$
+2304\times512 = 1,179,648
+$$
 
 所以约：
 
-``` text
+```text
 1.18 M parameters
 ```
 
@@ -583,7 +607,7 @@ nn.Conv2d(
 
 这也解释了为什么现代网络会使用：
 
-``` text
+```text
 1×1 convolution
 depthwise convolution
 group convolution
@@ -592,13 +616,13 @@ bottleneck
 
 来控制计算量。
 
-------------------------------------------------------------------------
+---
 
 # 12. `1×1 Conv` 到底有什么用？
 
 初学者第一次看到：
 
-``` python
+```python
 nn.Conv2d(
     256,
     128,
@@ -614,19 +638,19 @@ nn.Conv2d(
 
 输入一个位置：
 
-``` text
+```text
 256-dimensional feature
 ```
 
 1×1 Conv 可以把它变成：
 
-``` text
+```text
 128-dimensional feature
 ```
 
 因此：
 
-``` text
+```text
 [B,256,H,W]
 ↓ Conv1×1
 [B,128,H,W]
@@ -634,31 +658,37 @@ nn.Conv2d(
 
 空间尺寸不变。
 
-------------------------------------------------------------------------
+---
 
 # 13. `1×1 Conv` 参数量优势
 
 假设：
 
-``` text
+```text
 256 → 128
 ```
 
 使用 1×1：
 
-\[ 128`\times256`{=tex} = 32,768 \]
+$$
+128\times256 = 32,768
+$$
 
 如果使用 3×3：
 
-\[ 128`\times256`{=tex}`\times9`{=tex} = 294,912 \]
+$$
+128\times256\times9 = 294,912
+$$
 
 是前者的：
 
-\[ 9`\times`{=tex} \]
+$$
+9\times
+$$
 
 所以 1×1 Conv 非常适合：
 
-``` text
+```text
 channel projection
 channel compression
 feature alignment
@@ -666,20 +696,20 @@ feature alignment
 
 后面 HybridEncoder 里就会频繁遇到 channel projection。
 
-------------------------------------------------------------------------
+---
 
 # 14. Groups 是什么？
 
 普通 convolution：
 
-``` text
+```text
 每个输出 channel
 都可以连接所有输入 channels
 ```
 
 如果：
 
-``` python
+```python
 groups > 1
 ```
 
@@ -687,7 +717,7 @@ groups > 1
 
 例如：
 
-``` text
+```text
 Cin = 64
 Cout = 64
 groups = 4
@@ -695,7 +725,7 @@ groups = 4
 
 相当于分成 4 组：
 
-``` text
+```text
 每组：
 16 input channels
 →
@@ -704,19 +734,19 @@ groups = 4
 
 不同组之间不直接通过该卷积混合。
 
-------------------------------------------------------------------------
+---
 
 # 15. Depthwise Convolution
 
 特殊情况：
 
-``` text
+```text
 groups = Cin
 ```
 
 并且常见：
 
-``` text
+```text
 Cout = Cin
 ```
 
@@ -724,7 +754,7 @@ Cout = Cin
 
 例如：
 
-``` python
+```python
 nn.Conv2d(
     256,
     256,
@@ -735,23 +765,27 @@ nn.Conv2d(
 
 普通 3×3 Conv 参数：
 
-\[ 256`\times256`{=tex}`\times9`{=tex} = 589,824 \]
+$$
+256\times256\times9 = 589,824
+$$
 
 Depthwise Conv：
 
-\[ 256`\times1`{=tex}`\times9`{=tex} = 2,304 \]
+$$
+256\times1\times9 = 2,304
+$$
 
 差距巨大。
 
 这也是轻量网络常用结构。
 
-------------------------------------------------------------------------
+---
 
 # 16. 真实 HGNetv2：Stage Downsample 就用了 Depthwise Conv
 
 HGNetv2 的 stage 中，官方实现的 downsample 可以概括为：
 
-``` python
+```python
 ConvBNAct(
     in_chs,
     in_chs,
@@ -764,7 +798,7 @@ ConvBNAct(
 
 注意：
 
-``` text
+```text
 Cin = Cout = in_chs
 groups = in_chs
 ```
@@ -773,26 +807,26 @@ groups = in_chs
 
 而：
 
-``` text
+```text
 stride = 2
 ```
 
 负责：
 
-``` text
+```text
 H → H/2
 W → W/2
 ```
 
 所以它用很低的参数成本完成空间下采样。
 
-------------------------------------------------------------------------
+---
 
 # 17. LightConvBNAct 为什么也有 Depthwise 思想？
 
 HGNetv2 中的轻量卷积模块可以概括为：
 
-``` text
+```text
 1×1 Conv
    ↓
 Depthwise K×K Conv
@@ -800,7 +834,7 @@ Depthwise K×K Conv
 
 即：
 
-``` python
+```python
 conv1:
 1×1 channel transform
 
@@ -810,7 +844,7 @@ K×K, groups=out_chs
 
 这是很典型的：
 
-``` text
+```text
 Pointwise
 +
 Depthwise
@@ -820,7 +854,7 @@ Depthwise
 
 直觉：
 
-``` text
+```text
 1×1
 → 负责 channels 之间的信息混合
 
@@ -830,13 +864,13 @@ Depthwise K×K
 
 把"channel mixing"和"spatial filtering"部分拆开，可以显著减少计算。
 
-------------------------------------------------------------------------
+---
 
 # 18. Dilation 是什么？
 
 普通 3×3 kernel：
 
-``` text
+```text
 x x x
 x x x
 x x x
@@ -844,7 +878,7 @@ x x x
 
 dilation=2 时：
 
-``` text
+```text
 x . x . x
 . . . . .
 x . x . x
@@ -854,7 +888,7 @@ x . x . x
 
 kernel 仍然只有：
 
-``` text
+```text
 3×3 = 9
 ```
 
@@ -864,26 +898,30 @@ kernel 仍然只有：
 
 有效 kernel size：
 
-\[ K\_{eff} = D(K-1)+1 \]
+$$
+K_{eff} = D(K-1)+1
+$$
 
 例如：
 
-``` text
+```text
 K=3
 D=2
 ```
 
 则：
 
-\[ K\_{eff} = 2(3-1)+1 = 5 \]
+$$
+K_{eff} = 2(3-1)+1 = 5
+$$
 
 所以 3×3 dilation=2 在空间覆盖范围上相当于 5×5。
 
-------------------------------------------------------------------------
+---
 
 # 19. Stride 与 Dilation 的本质区别
 
-``` text
+```text
 Stride
 → 控制 kernel 每次移动多少
 → 常用于改变输出分辨率
@@ -895,32 +933,32 @@ Dilation
 
 不要混淆：
 
-``` text
+```text
 stride=2
 ```
 
 通常会下采样。
 
-``` text
+```text
 dilation=2
 ```
 
 如果 padding 合适，完全可以保持 H/W 不变。
 
-------------------------------------------------------------------------
+---
 
 # 20. Pooling 是什么？
 
 CNN 早期经常使用：
 
-``` text
+```text
 MaxPool
 AveragePool
 ```
 
 例如：
 
-``` python
+```python
 nn.MaxPool2d(
     kernel_size=2,
     stride=2
@@ -929,7 +967,7 @@ nn.MaxPool2d(
 
 可以：
 
-``` text
+```text
 640×640
 →
 320×320
@@ -937,34 +975,38 @@ nn.MaxPool2d(
 
 与卷积不同：
 
-``` text
+```text
 Pooling
 通常没有需要学习的卷积 kernel 权重。
 ```
 
 MaxPool：
 
-\[ y=`\max`{=tex}(x_1,x_2,`\ldots`{=tex}) \]
+$$
+y=\max(x_1,x_2,\ldots)
+$$
 
 AveragePool：
 
-\[ y=`\frac{1}{N}`{=tex}`\sum`{=tex}\_i x_i \]
+$$
+y=\frac{1}{N}\sum_i x_i
+$$
 
 HGNetv2 Stem 中也使用了 MaxPool 分支。
 
-------------------------------------------------------------------------
+---
 
 # 21. BatchNorm 是什么？
 
 真实 CNN 中很少只有：
 
-``` text
+```text
 Conv
 ```
 
 更常见：
 
-``` text
+```text
 Conv
 ↓
 BatchNorm
@@ -974,13 +1016,13 @@ Activation
 
 HGNetv2 直接把它封装为：
 
-``` text
+```text
 ConvBNAct
 ```
 
 可以先理解：
 
-``` text
+```text
 Conv
 → 提取/变换 feature
 
@@ -993,33 +1035,41 @@ Activation
 
 后面第 9 课读 HGNetv2 时会进一步讲。
 
-------------------------------------------------------------------------
+---
 
 # 22. ReLU 为什么需要？
 
 如果所有层都只是线性变换：
 
-\[ y=W_2(W_1x) \]
+$$
+y=W_2(W_1x)
+$$
 
 则：
 
-\[ y=(W_2W_1)x \]
+$$
+y=(W_2W_1)x
+$$
 
 很多层依然可以合并成一个线性变换。
 
 加入非线性：
 
-\[ y=W_2`\sigma`{=tex}(W_1x) \]
+$$
+y=W_2\sigma(W_1x)
+$$
 
 就不能简单合并。
 
 ReLU：
 
-\[ ReLU(x)=`\max`{=tex}(0,x) \]
+$$
+ReLU(x)=\max(0,x)
+$$
 
 HGNetv2 的 `ConvBNAct` 默认使用 ReLU。
 
-------------------------------------------------------------------------
+---
 
 # 23. 什么叫 Downsampling？
 
@@ -1027,7 +1077,7 @@ HGNetv2 的 `ConvBNAct` 默认使用 ReLU。
 
 例如：
 
-``` text
+```text
 640×640
 →
 320×320
@@ -1043,13 +1093,13 @@ HGNetv2 的 `ConvBNAct` 默认使用 ReLU。
 
 如果每一步都是：
 
-``` text
+```text
 stride=2
 ```
 
 那么总 stride：
 
-``` text
+```text
 2
 4
 8
@@ -1059,29 +1109,29 @@ stride=2
 
 例如：
 
-``` text
+```text
 640 / 8 = 80
 ```
 
 所以：
 
-``` text
+```text
 80×80
 ```
 
 feature map 被称为：
 
-``` text
+```text
 stride-8 feature
 ```
 
 或者：
 
-``` text
+```text
 1/8 resolution feature
 ```
 
-------------------------------------------------------------------------
+---
 
 # 24. "Stride 8"不是说最后一层 stride 参数一定等于 8
 
@@ -1089,7 +1139,7 @@ stride-8 feature
 
 假设连续三层：
 
-``` text
+```text
 Layer 1: stride=2
 Layer 2: stride=2
 Layer 3: stride=2
@@ -1097,17 +1147,19 @@ Layer 3: stride=2
 
 总 stride：
 
-\[ 2`\times2`{=tex}`\times2`{=tex}=8 \]
+$$
+2\times2\times2=8
+$$
 
 所以第三层相对于原图是：
 
-``` text
+```text
 stride 8
 ```
 
 虽然每一个单独 Conv 的：
 
-``` text
+```text
 stride
 ```
 
@@ -1115,7 +1167,7 @@ stride
 
 因此以后看到：
 
-``` text
+```text
 feat_strides = [8,16,32]
 ```
 
@@ -1123,31 +1175,37 @@ feat_strides = [8,16,32]
 
 > 这些输出 feature maps 相对于原始输入图片的累计 stride。
 
-------------------------------------------------------------------------
+---
 
 # 25. 从 640 手算检测器最经典的三尺度
 
 输入：
 
-``` text
+```text
 640×640
 ```
 
 stride 8：
 
-\[ 640/8=80 \]
+$$
+640/8=80
+$$
 
 stride 16：
 
-\[ 640/16=40 \]
+$$
+640/16=40
+$$
 
 stride 32：
 
-\[ 640/32=20 \]
+$$
+640/32=20
+$$
 
 所以：
 
-``` text
+```text
 stride 8  → 80×80
 stride 16 → 40×40
 stride 32 → 20×20
@@ -1155,7 +1213,7 @@ stride 32 → 20×20
 
 这就是第 1、2 课反复出现的：
 
-``` text
+```text
 P3
 P4
 P5
@@ -1163,13 +1221,13 @@ P5
 
 常见空间尺度。
 
-------------------------------------------------------------------------
+---
 
 # 26. 为什么目标检测特别喜欢多尺度？
 
 假设图片里有：
 
-``` text
+```text
 一个很小的人
 一辆中等大小的车
 一辆占据半张图的大巴
@@ -1177,7 +1235,7 @@ P5
 
 如果只有：
 
-``` text
+```text
 20×20
 ```
 
@@ -1189,7 +1247,7 @@ feature map，
 
 如果有：
 
-``` text
+```text
 80×80
 ```
 
@@ -1199,7 +1257,7 @@ feature map，
 
 因此检测器常常保留：
 
-``` text
+```text
 高分辨率 feature
 +
 中分辨率 feature
@@ -1209,13 +1267,13 @@ feature map，
 
 然后再进行融合。
 
-------------------------------------------------------------------------
+---
 
 # 27. 但是"P3 只检测小目标"是错误的简化
 
 初学时常听：
 
-``` text
+```text
 P3 → 小目标
 P4 → 中目标
 P5 → 大目标
@@ -1225,7 +1283,7 @@ P5 → 大目标
 
 现代检测器会：
 
-``` text
+```text
 top-down fusion
 bottom-up fusion
 attention
@@ -1238,7 +1296,7 @@ cross-scale interaction
 
 > 高分辨率层通常保留更细的空间信息，低分辨率深层通常具有更大的有效上下文和更抽象的特征；多尺度融合让检测器综合利用这些信息。
 
-------------------------------------------------------------------------
+---
 
 # 28. 现在进入真实 `deim_dfine_x` Backbone：HGNetv2-B5
 
@@ -1246,7 +1304,7 @@ cross-scale interaction
 
 官方 HGNetv2 的 B5 配置核心可以整理为：
 
-``` text
+```text
 Stem:
 3 → 32 → 64
 
@@ -1271,7 +1329,7 @@ light_block = True
 
 B5 的 stage 结构参数还包括：
 
-``` text
+```text
 Stage 1:
 mid=64
 out=128
@@ -1303,7 +1361,7 @@ layers/block=6
 
 这里先重点关注：
 
-``` text
+```text
 spatial size
 channel
 downsample
@@ -1311,19 +1369,19 @@ downsample
 
 HGBlock 内部第 9 课再彻底拆。
 
-------------------------------------------------------------------------
+---
 
 # 29. HGNetv2 自己声明了哪些输出 stride？
 
 官方实现中：
 
-``` python
+```python
 self._out_strides = [4, 8, 16, 32]
 ```
 
 对应：
 
-``` text
+```text
 Stage 1 → stride 4
 Stage 2 → stride 8
 Stage 3 → stride 16
@@ -1332,13 +1390,13 @@ Stage 4 → stride 32
 
 而常见：
 
-``` python
+```python
 return_idx = [1,2,3]
 ```
 
 表示返回：
 
-``` text
+```text
 Stage 2
 Stage 3
 Stage 4
@@ -1346,7 +1404,7 @@ Stage 4
 
 所以检测器得到的正好是：
 
-``` text
+```text
 stride 8
 stride 16
 stride 32
@@ -1354,13 +1412,13 @@ stride 32
 
 三层。
 
-------------------------------------------------------------------------
+---
 
 # 30. HGNetv2 Stem：为什么输出已经是 stride 4？
 
 官方 Stem 的关键路径可以抽象为：
 
-``` text
+```text
 input
   │
   ▼
@@ -1381,17 +1439,19 @@ stem4: 1×1, stride=1
 
 有两次：
 
-``` text
+```text
 stride=2
 ```
 
 所以累计 stride：
 
-\[ 2`\times2`{=tex}=4 \]
+$$
+2\times2=4
+$$
 
 因此：
 
-``` text
+```text
 640
 → 320
 → 160
@@ -1399,55 +1459,55 @@ stride=2
 
 Stem 最终：
 
-``` text
+```text
 stride 4
 ```
 
-------------------------------------------------------------------------
+---
 
 # 31. HGNetv2-B5 Stem 的真实 Shape 直觉推导
 
 输入：
 
-``` text
+```text
 [B,3,640,640]
 ```
 
 第一层：
 
-``` text
+```text
 3 → 32
 stride 2
 ```
 
 得到：
 
-``` text
+```text
 [B,32,320,320]
 ```
 
 经过 Stem 内部分支、concat、第二次 stride=2 后：
 
-``` text
+```text
 [B,32,160,160]
 ```
 
 最后：
 
-``` text
+```text
 1×1 Conv
 32 → 64
 ```
 
 得到：
 
-``` text
+```text
 [B,64,160,160]
 ```
 
 所以 Stem：
 
-``` text
+```text
 [B,3,640,640]
 →
 [B,64,160,160]
@@ -1455,17 +1515,17 @@ stride 2
 
 累计 stride：
 
-``` text
+```text
 4
 ```
 
-------------------------------------------------------------------------
+---
 
 # 32. Stage 1 为什么仍然是 160×160？
 
 B5 Stage 1：
 
-``` text
+```text
 downsample = False
 ```
 
@@ -1473,13 +1533,13 @@ downsample = False
 
 Channel：
 
-``` text
+```text
 64 → 128
 ```
 
 于是：
 
-``` text
+```text
 [B,64,160,160]
 →
 [B,128,160,160]
@@ -1487,30 +1547,30 @@ Channel：
 
 仍是：
 
-``` text
+```text
 stride 4
 ```
 
-------------------------------------------------------------------------
+---
 
 # 33. Stage 2：得到第一个检测尺度
 
 Stage 2：
 
-``` text
+```text
 downsample = True
 ```
 
 先：
 
-``` text
+```text
 3×3 depthwise conv
 stride=2
 ```
 
 所以：
 
-``` text
+```text
 160×160
 →
 80×80
@@ -1518,13 +1578,13 @@ stride=2
 
 随后 HG blocks 把 feature 转换到：
 
-``` text
+```text
 512 channels
 ```
 
 所以：
 
-``` text
+```text
 Stage 2 output
 =
 [B,512,80,80]
@@ -1532,25 +1592,25 @@ Stage 2 output
 
 累计 stride：
 
-``` text
+```text
 8
 ```
 
 这就是第一个返回的 feature。
 
-------------------------------------------------------------------------
+---
 
 # 34. Stage 3：第二个检测尺度
 
 输入：
 
-``` text
+```text
 [B,512,80,80]
 ```
 
 downsample：
 
-``` text
+```text
 80×80
 →
 40×40
@@ -1558,35 +1618,35 @@ downsample：
 
 输出 channel：
 
-``` text
+```text
 1024
 ```
 
 得到：
 
-``` text
+```text
 [B,1024,40,40]
 ```
 
 累计 stride：
 
-``` text
+```text
 16
 ```
 
-------------------------------------------------------------------------
+---
 
 # 35. Stage 4：第三个检测尺度
 
 输入：
 
-``` text
+```text
 [B,1024,40,40]
 ```
 
 downsample：
 
-``` text
+```text
 40×40
 →
 20×20
@@ -1594,35 +1654,35 @@ downsample：
 
 输出 channel：
 
-``` text
+```text
 2048
 ```
 
 得到：
 
-``` text
+```text
 [B,2048,20,20]
 ```
 
 累计 stride：
 
-``` text
+```text
 32
 ```
 
-------------------------------------------------------------------------
+---
 
 # 36. 所以 `deim_dfine_x` Backbone 输出是什么？
 
 对于标准：
 
-``` text
+```text
 640×640
 ```
 
 输入，我们得到核心三尺度：
 
-``` text
+```text
 C3:
 [B, 512, 80, 80]
 stride = 8
@@ -1638,7 +1698,7 @@ stride = 32
 
 这就是以后第 9、10 课进入：
 
-``` text
+```text
 HGNetv2
 →
 HybridEncoder
@@ -1646,13 +1706,13 @@ HybridEncoder
 
 时非常关键的输入。
 
-------------------------------------------------------------------------
+---
 
 # 37. 为什么 HybridEncoder 不能直接假设 channel 都一样？
 
 Backbone 给：
 
-``` text
+```text
 512
 1024
 2048
@@ -1666,7 +1726,7 @@ Backbone 给：
 
 概念上：
 
-``` text
+```text
 [B, 512,80,80]
      │
      └─ projection ─→ [B,C,80,80]
@@ -1682,7 +1742,7 @@ Backbone 给：
 
 之后：
 
-``` text
+```text
 channel 统一
 spatial resolution 不同
 ```
@@ -1691,13 +1751,13 @@ spatial resolution 不同
 
 第 10 课会正式拆 `HybridEncoder`。
 
-------------------------------------------------------------------------
+---
 
 # 38. HGBlock 在做什么？先建立直觉
 
 HGNetv2 的 `HG_Block` 不是简单：
 
-``` text
+```text
 Conv → Conv → Conv
 ```
 
@@ -1705,7 +1765,7 @@ Conv → Conv → Conv
 
 概念上：
 
-``` text
+```text
 input x
   │
   ├──────────────┐
@@ -1733,7 +1793,7 @@ layer 3 ...      │
 
 官方逻辑可以概括为：
 
-``` python
+```python
 output = [x]
 
 for layer in self.layers:
@@ -1746,19 +1806,19 @@ x = self.aggregation(x)
 
 这与第 2 课学过的：
 
-``` python
+```python
 torch.cat(...)
 ```
 
 直接连接起来了。
 
-------------------------------------------------------------------------
+---
 
 # 39. 手算 HGBlock 的 concat channel
 
 假设：
 
-``` text
+```text
 input channels = 128
 mid channels = 64
 layer_num = 6
@@ -1766,7 +1826,7 @@ layer_num = 6
 
 `output` 中包含：
 
-``` text
+```text
 原 input:
 128 channels
 
@@ -1776,23 +1836,25 @@ layer_num = 6
 
 所以 concat：
 
-\[ C\_{total} = 128+6`\times64`{=tex} \]
+$$
+C_{total} = 128+6\times64
+$$
 
-# \[
-
+$$
 # 128+384
 
-512 \]
+512
+$$
 
 这正对应官方实现中的思想：
 
-``` python
+```python
 total_chs = in_chs + layer_num * mid_chs
 ```
 
 然后 aggregation 再把：
 
-``` text
+```text
 512
 ```
 
@@ -1800,7 +1862,7 @@ total_chs = in_chs + layer_num * mid_chs
 
 你现在已经能从第 2 课的 `cat` 理解 HGBlock 的 channel aggregation。
 
-------------------------------------------------------------------------
+---
 
 # 40. ESE/SE 类模块为什么存在？
 
@@ -1810,13 +1872,13 @@ HGNetv2 中有 channel attention 风格的聚合模块。
 
 先对空间：
 
-``` text
+```text
 H×W
 ```
 
 做全局平均：
 
-``` text
+```text
 [B,C,H,W]
 →
 [B,C,1,1]
@@ -1824,32 +1886,34 @@ H×W
 
 公式：
 
-\[ z_c = `\frac{1}{HW}`{=tex} `\sum`{=tex}*{i=1}\^{H}
-`\sum`{=tex}*{j=1}\^{W} x\_{c,i,j} \]
+$$
+z_c = \frac{1}{HW} \sum_{i=1}^{H}
+\sum_{j=1}^{W} x_{c,i,j}
+$$
 
 得到每个 channel 的全局描述。
 
 然后生成 channel 权重：
 
-``` text
+```text
 [B,C,1,1]
 ```
 
 再广播乘回：
 
-``` text
+```text
 [B,C,H,W]
 ```
 
 这与第 2 课的 broadcasting 又连接起来。
 
-------------------------------------------------------------------------
+---
 
 # 41. 参数量和计算量不是同一个概念
 
 假设同一个：
 
-``` text
+```text
 3×3 Conv
 Cin=256
 Cout=256
@@ -1857,7 +1921,9 @@ Cout=256
 
 参数量与输入 H/W 无关：
 
-\[ Params = 256`\times256`{=tex}`\times9`{=tex} \]
+$$
+Params = 256\times256\times9
+$$
 
 但计算量与输出空间尺寸有关。
 
@@ -1865,12 +1931,13 @@ Cout=256
 
 粗略 MACs：
 
-\[ MACs = H\_{out}W\_{out} C\_{out} `\frac{C_{in}}{groups}`{=tex} K_hK_w
-\]
+$$
+MACs = H_{out}W_{out} C_{out} \frac{C_{in}}{groups} K_hK_w
+$$
 
 所以：
 
-``` text
+```text
 80×80
 ```
 
@@ -1878,19 +1945,19 @@ Cout=256
 
 比：
 
-``` text
+```text
 20×20
 ```
 
 昂贵得多。
 
-------------------------------------------------------------------------
+---
 
 # 42. 手算一个 Conv 的 MACs
 
 假设：
 
-``` text
+```text
 Input/Output spatial = 80×80
 Cin = 256
 Cout = 256
@@ -1900,43 +1967,51 @@ groups = 1
 
 则：
 
-\[ MACs = 80`\times80`{=tex} `\times256`{=tex} `\times256`{=tex}
-`\times9`{=tex} \]
+$$
+MACs = 80\times80 \times256 \times256
+\times9
+$$
 
 约：
 
-\[ 3.77`\times10`{=tex}\^9 \]
+$$
+3.77\times10^9
+$$
 
 也就是约：
 
-``` text
+```text
 3.77 G MACs
 ```
 
 如果同一卷积放到：
 
-``` text
+```text
 20×20
 ```
 
 则：
 
-\[ 20`\times20`{=tex} `\times256`{=tex} `\times256`{=tex}
-`\times9`{=tex} \]
+$$
+20\times20 \times256 \times256
+\times9
+$$
 
 约：
 
-``` text
+```text
 0.236 G MACs
 ```
 
 因为空间面积：
 
-\[ 80^2/20^2=16 \]
+$$
+80^2/20^2=16
+$$
 
 相差 16 倍。
 
-------------------------------------------------------------------------
+---
 
 # 43. 为什么网络越早的高分辨率层特别贵？
 
@@ -1944,7 +2019,7 @@ groups = 1
 
 例如：
 
-``` text
+```text
 320×320
 160×160
 80×80
@@ -1956,7 +2031,7 @@ groups = 1
 
 所以网络设计常常：
 
-``` text
+```text
 早期：
 channel 较少
 
@@ -1967,7 +2042,7 @@ channel 再增加
 
 这是一种计算资源分配。
 
-------------------------------------------------------------------------
+---
 
 # 44. FLOPs 与 MACs 的关系
 
@@ -1975,7 +2050,7 @@ channel 再增加
 
 常见：
 
-``` text
+```text
 1 MAC
 =
 1 multiplication + 1 addition
@@ -1983,7 +2058,7 @@ channel 再增加
 
 有些统计把：
 
-``` text
+```text
 1 MAC ≈ 2 FLOPs
 ```
 
@@ -1995,7 +2070,7 @@ channel 再增加
 
 不要机械比较数字。
 
-------------------------------------------------------------------------
+---
 
 # 45. 什么叫 Receptive Field（感受野）？
 
@@ -2003,7 +2078,7 @@ channel 再增加
 
 一个输出位置直接观察：
 
-``` text
+```text
 3×3
 ```
 
@@ -2018,14 +2093,14 @@ channel 再增加
 
 直觉：
 
-``` text
+```text
 网络越深
 → 一个 feature location 能“看到”的原图范围通常越大
 ```
 
 这对目标检测很重要：
 
-``` text
+```text
 小局部
 → 边缘/纹理
 
@@ -2033,71 +2108,87 @@ channel 再增加
 → 物体结构/场景关系
 ```
 
-------------------------------------------------------------------------
+---
 
 # 46. 感受野的递推公式
 
 可以用两个量：
 
-``` text
+```text
 r = receptive field size
 j = jump / effective stride
 ```
 
 初始化：
 
-``` text
+```text
 r0 = 1
 j0 = 1
 ```
 
 每一层：
 
-\[ j_l = j\_{l-1}S_l \]
+$$
+j_l = j_{l-1}S_l
+$$
 
-\[ r_l = r\_{l-1} + (K\_{eff,l}-1)j\_{l-1} \]
+$$
+r_l = r_{l-1} + (K_{eff,l}-1)j_{l-1}
+$$
 
 其中：
 
-\[ K\_{eff} = D(K-1)+1 \]
+$$
+K_{eff} = D(K-1)+1
+$$
 
 这可以精确追踪理论感受野。
 
-------------------------------------------------------------------------
+---
 
 # 47. 感受野手算
 
 两层：
 
-``` text
+```text
 Conv3×3 stride=2
 Conv3×3 stride=2
 ```
 
 初始：
 
-``` text
+```text
 r0=1
 j0=1
 ```
 
 第一层：
 
-\[ j_1=1`\times2`{=tex}=2 \]
+$$
+j_1=1\times2=2
+$$
 
-\[ r_1=1+(3-1)`\times1`{=tex}=3 \]
+$$
+r_1=1+(3-1)\times1=3
+$$
 
 第二层：
 
-\[ j_2=2`\times2`{=tex}=4 \]
+$$
+j_2=2\times2=4
+$$
 
-\[ r_2=3+(3-1)`\times2`{=tex} \]
+$$
+r_2=3+(3-1)\times2
+$$
 
-\[ =7 \]
+$$
+=7
+$$
 
 所以第二层一个 feature position 理论上对应原图：
 
-``` text
+```text
 7×7
 ```
 
@@ -2105,17 +2196,17 @@ j0=1
 
 而位置之间的有效步长：
 
-``` text
+```text
 4
 ```
 
-------------------------------------------------------------------------
+---
 
 # 48. Effective Receptive Field 与理论感受野
 
 理论公式告诉我们：
 
-``` text
+```text
 哪些输入像素有可能影响这个 feature
 ```
 
@@ -2123,7 +2214,7 @@ j0=1
 
 所以还存在：
 
-``` text
+```text
 effective receptive field
 ```
 
@@ -2131,16 +2222,16 @@ effective receptive field
 
 本课程中：
 
--   shape 推导主要使用理论 stride；
--   模型语义理解时记住真实有效感受野更加复杂。
+- shape 推导主要使用理论 stride；
+- 模型语义理解时记住真实有效感受野更加复杂。
 
-------------------------------------------------------------------------
+---
 
 # 49. 为什么检测 Backbone 不直接一路压到 1×1？
 
 分类网络最终可以：
 
-``` text
+```text
 feature map
 → global average pooling
 → class
@@ -2156,7 +2247,7 @@ feature map
 
 如果过早把空间压成：
 
-``` text
+```text
 1×1
 ```
 
@@ -2164,7 +2255,7 @@ feature map
 
 因此检测器需要保留：
 
-``` text
+```text
 80×80
 40×40
 20×20
@@ -2172,7 +2263,7 @@ feature map
 
 这样的空间结构。
 
-------------------------------------------------------------------------
+---
 
 # 50. CNN 与 ViT 在 DEIMv2 中的角色对照
 
@@ -2184,7 +2275,7 @@ feature map
 
 CNN：
 
-``` text
+```text
 Image
 ↓
 local convolution
@@ -2196,7 +2287,7 @@ hierarchical downsampling
 
 ViT：
 
-``` text
+```text
 Image
 ↓
 patch embedding
@@ -2216,11 +2307,11 @@ DINOv3 的检测适配需要解决一个重要问题：
 
 所以本课 CNN 多尺度概念，也是在给第 20 课 STA 铺路。
 
-------------------------------------------------------------------------
+---
 
 # 51. 小型 PyTorch 实验 1：验证卷积输出公式
 
-``` python
+```python
 import torch
 import torch.nn as nn
 
@@ -2244,12 +2335,14 @@ print("output:", y.shape)
 
 运行前先算：
 
-\[ O = `\left`{=tex}`\lfloor`{=tex} `\frac{640+2-3}{2}`{=tex}+1
-`\right`{=tex}`\rfloor`{=tex} = 320 \]
+$$
+O = \left\lfloor \frac{640+2-3}{2}+1
+\right\rfloor = 320
+$$
 
 所以预期：
 
-``` text
+```text
 input:
 [2,3,640,640]
 
@@ -2257,13 +2350,13 @@ output:
 [2,32,320,320]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 52. 小型实验 2：写一个 Conv Shape Calculator
 
 自己实现：
 
-``` python
+```python
 import math
 
 def conv_out_size(
@@ -2286,7 +2379,7 @@ def conv_out_size(
 
 测试：
 
-``` python
+```python
 print(
     conv_out_size(
         640,
@@ -2299,17 +2392,17 @@ print(
 
 应该：
 
-``` text
+```text
 320
 ```
 
 以后读任何 Conv，都先手算再用 PyTorch 验证。
 
-------------------------------------------------------------------------
+---
 
 # 53. 小型实验 3：模拟检测 Backbone
 
-``` python
+```python
 import torch
 import torch.nn as nn
 
@@ -2372,7 +2465,7 @@ features = model(x)
 
 预期：
 
-``` text
+```text
 stride 2:
 [2,32,320,320]
 
@@ -2395,11 +2488,11 @@ stride 32:
 
 > 多尺度 Backbone 最核心的空间 shape 原理。
 
-------------------------------------------------------------------------
+---
 
 # 54. 小型实验 4：普通 Conv vs Depthwise Conv 参数量
 
-``` python
+```python
 import torch.nn as nn
 
 normal = nn.Conv2d(
@@ -2439,7 +2532,7 @@ print(
 
 预期：
 
-``` text
+```text
 normal:
 589824
 
@@ -2449,17 +2542,21 @@ depthwise:
 
 比例：
 
-\[ 589824/2304=256 \]
+$$
+589824/2304=256
+$$
 
 所以这个例子里 depthwise 的卷积权重只有普通卷积的：
 
-\[ 1/256 \]
+$$
+1/256
+$$
 
-------------------------------------------------------------------------
+---
 
 # 55. 小型实验 5：模拟 HGBlock 的 Feature Aggregation
 
-``` python
+```python
 import torch
 
 B = 2
@@ -2488,27 +2585,29 @@ print(y.shape)
 
 手算：
 
-\[ 128+6`\times64`{=tex} = 512 \]
+$$
+128+6\times64 = 512
+$$
 
 所以：
 
-``` text
+```text
 [2,512,80,80]
 ```
 
 这就是 HGBlock 中：
 
-``` text
+```text
 feature aggregation
 ```
 
 的 shape 直觉。
 
-------------------------------------------------------------------------
+---
 
 # 56. 小型实验 6：模拟 ESE 的 Broadcasting
 
-``` python
+```python
 import torch
 
 x = torch.randn(
@@ -2535,7 +2634,7 @@ print(y.shape)
 
 shape：
 
-``` text
+```text
 x:
 [2,512,80,80]
 
@@ -2551,7 +2650,7 @@ broadcast multiply:
 
 这直接复习了第 2 课的 broadcasting。
 
-------------------------------------------------------------------------
+---
 
 # 57. 小型实验 7：自动打印每个 Stage Shape
 
@@ -2559,7 +2658,7 @@ broadcast multiply:
 
 通用写法：
 
-``` python
+```python
 def hook_fn(name):
     def hook(module, inputs, output):
         if isinstance(output, torch.Tensor):
@@ -2572,7 +2671,7 @@ def hook_fn(name):
 
 然后：
 
-``` python
+```python
 handle = some_module.register_forward_hook(
     hook_fn("stage")
 )
@@ -2582,7 +2681,7 @@ forward 时自动打印。
 
 后续第 9 课我们会升级成完整：
 
-``` text
+```text
 module name
 input shape
 output shape
@@ -2593,20 +2692,20 @@ requires_grad
 
 的 Backbone tracer。
 
-------------------------------------------------------------------------
+---
 
 # 58. 一个非常重要的工程问题：640 不一定永远是 640
 
 训练时可能存在：
 
-``` text
+```text
 multi-scale training
 random resize
 ```
 
 所以模型不能把：
 
-``` text
+```text
 80
 40
 20
@@ -2616,7 +2715,7 @@ random resize
 
 更通用的关系是：
 
-``` text
+```text
 H8  = H / 8
 W8  = W / 8
 
@@ -2629,13 +2728,13 @@ W32 = W / 32
 
 例如输入：
 
-``` text
+```text
 800×800
 ```
 
 则：
 
-``` text
+```text
 100×100
 50×50
 25×25
@@ -2643,19 +2742,19 @@ W32 = W / 32
 
 这也是为什么源码经常动态读取：
 
-``` python
+```python
 h, w = x.shape[-2:]
 ```
 
 而不是直接写死数字。
 
-------------------------------------------------------------------------
+---
 
 # 59. 如果输入不是 stride 的整数倍怎么办？
 
 例如：
 
-``` text
+```text
 641×641
 ```
 
@@ -2663,18 +2762,20 @@ h, w = x.shape[-2:]
 
 输出尺寸需要严格使用：
 
-\[ `\left`{=tex}`\lfloor`{=tex} `\frac{I+2P-D(K-1)-1}{S}`{=tex}+1
-`\right`{=tex}`\rfloor`{=tex} \]
+$$
+\left\lfloor \frac{I+2P-D(K-1)-1}{S}+1
+\right\rfloor
+$$
 
 不能简单说：
 
-``` text
+```text
 641 / 2
 ```
 
 因为涉及：
 
-``` text
+```text
 floor
 padding
 kernel
@@ -2684,26 +2785,26 @@ kernel
 
 > 整齐的 640 是教学方便，实际 shape 必须以公式和代码为准。
 
-------------------------------------------------------------------------
+---
 
 # 60. `padding="same"` 为什么有时很麻烦？
 
 所谓 same padding 通常希望：
 
-``` text
+```text
 stride=1
 ```
 
 时保持：
 
-``` text
+```text
 Hout = Hin
 Wout = Win
 ```
 
 但：
 
-``` text
+```text
 偶数 kernel
 stride > 1
 不同 dilation
@@ -2713,13 +2814,13 @@ stride > 1
 
 HGNetv2 Stem 中就存在显式：
 
-``` python
+```python
 F.pad(...)
 ```
 
 以及：
 
-``` text
+```text
 kernel_size=2
 ```
 
@@ -2727,7 +2828,7 @@ kernel_size=2
 
 所以第 9 课逐行拆 Stem 时，我们会严格算每一次：
 
-``` text
+```text
 pad
 conv
 pool
@@ -2736,13 +2837,13 @@ cat
 
 而不是粗暴说"Stem 降采样 4 倍"。
 
-------------------------------------------------------------------------
+---
 
 # 61. 为什么本课暂时没有逐像素手算整个 HGNetv2？
 
 因为 HGNetv2-B5 包含大量：
 
-``` text
+```text
 HG_Block
 LightConvBNAct
 aggregation
@@ -2753,13 +2854,13 @@ multiple blocks
 
 如果第 3 课直接完整展开，会把：
 
-``` text
+```text
 CNN 基础
 ```
 
 和：
 
-``` text
+```text
 HGNetv2 专属架构
 ```
 
@@ -2767,7 +2868,7 @@ HGNetv2 专属架构
 
 课程设计是：
 
-``` text
+```text
 第 3 课
 先掌握所有 CNN shape 原理
 
@@ -2779,13 +2880,13 @@ HGNetv2 专属架构
 
 届时你不是"听我说 shape"，而是能自己推导。
 
-------------------------------------------------------------------------
+---
 
 # 62. 本课的 DEIMv2 结构地图
 
 现在我们已经能理解：
 
-``` text
+```text
 deim_dfine_x
 
 Image
@@ -2829,13 +2930,13 @@ HybridEncoder
 
 这就是本课最终需要真正记住的 DEIM 连接。
 
-------------------------------------------------------------------------
+---
 
 # 63. 再连接第 2 课：这些 Feature Map 以后怎样变成 Tokens？
 
 Backbone：
 
-``` text
+```text
 C3
 [B,512,80,80]
 
@@ -2850,13 +2951,13 @@ HybridEncoder 会进行 channel projection 和融合。
 
 假设最后统一到：
 
-``` text
+```text
 C
 ```
 
 那么可以得到：
 
-``` text
+```text
 [B,C,80,80]
 [B,C,40,40]
 [B,C,20,20]
@@ -2864,7 +2965,7 @@ C
 
 第 2 课已经知道：
 
-``` text
+```text
 flatten(2)
 +
 transpose(1,2)
@@ -2872,7 +2973,7 @@ transpose(1,2)
 
 得到：
 
-``` text
+```text
 [B,6400,C]
 [B,1600,C]
 [B, 400,C]
@@ -2880,29 +2981,29 @@ transpose(1,2)
 
 cat：
 
-``` text
+```text
 [B,8400,C]
 ```
 
 于是现在：
 
-``` text
+```text
 CNN 世界
 ```
 
 和：
 
-``` text
+```text
 Transformer 世界
 ```
 
 已经接上了。
 
-------------------------------------------------------------------------
+---
 
 # 64. 本课必须真正理解的 12 个概念
 
-``` text
+```text
 Convolution
 Kernel
 Stride
@@ -2921,30 +3022,30 @@ Receptive Field
 
 每个词至少能回答：
 
-``` text
+```text
 它改变 H/W 吗？
 它改变 channel 吗？
 它影响参数量吗？
 它为什么对检测有用？
 ```
 
-------------------------------------------------------------------------
+---
 
 # 65. 本课自测
 
 请尽量不运行代码。
 
-## Q1
+Q1
 
 输入：
 
-``` text
+```text
 [B,3,640,640]
 ```
 
 经过：
 
-``` text
+```text
 Conv3×3
 Cout=32
 stride=2
@@ -2953,43 +3054,43 @@ padding=1
 
 输出 shape？
 
-------------------------------------------------------------------------
+---
 
-## Q2
+Q2
 
 为什么：
 
-``` text
+```text
 stride=2
 ```
 
 通常会把 H/W 减半？
 
-------------------------------------------------------------------------
+---
 
-## Q3
+Q3
 
 连续三个：
 
-``` text
+```text
 stride=2
 ```
 
 的层，相对于原图的累计 stride 是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q4
+Q4
 
 输入 640，stride 8/16/32 的 feature map 分别是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q5
+Q5
 
 普通：
 
-``` text
+```text
 Conv3×3
 Cin=256
 Cout=256
@@ -2997,31 +3098,31 @@ Cout=256
 
 无 bias 的参数量是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q6
+Q6
 
 同样 channel 的 depthwise 3×3 参数量是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q7
+Q7
 
 `groups=Cin` 在 `Cin=Cout` 的典型情况下意味着什么？
 
-------------------------------------------------------------------------
+---
 
-## Q8
+Q8
 
 为什么 1×1 Conv 虽然不看邻域，仍然非常有用？
 
-------------------------------------------------------------------------
+---
 
-## Q9
+Q9
 
 HGNetv2-B5：
 
-``` text
+```text
 Stage2
 Stage3
 Stage4
@@ -3029,43 +3130,43 @@ Stage4
 
 在 640 输入下分别输出什么 spatial size？
 
-------------------------------------------------------------------------
+---
 
-## Q10
+Q10
 
 对应 channel 分别是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q11
+Q11
 
 为什么目标检测不希望 Backbone 最终只留下 1×1 feature？
 
-------------------------------------------------------------------------
+---
 
-## Q12
+Q12
 
 为什么：
 
-``` text
+```text
 80×80
 ```
 
 上的同一个 Conv 通常比：
 
-``` text
+```text
 20×20
 ```
 
 上的贵很多？
 
-------------------------------------------------------------------------
+---
 
 # 66. 课后作业 A：完整手算 Backbone
 
 设计：
 
-``` text
+```text
 Input
 [B,3,640,640]
 
@@ -3092,7 +3193,7 @@ K=3 S=2 P=1
 
 要求对每层写：
 
-``` text
+```text
 Input shape
 Output shape
 Cumulative stride
@@ -3101,7 +3202,7 @@ Parameter count
 
 然后用 PyTorch 验证。
 
-------------------------------------------------------------------------
+---
 
 # 67. 课后作业 B：普通卷积 vs Depthwise + Pointwise
 
@@ -3109,14 +3210,14 @@ Parameter count
 
 方案 A：
 
-``` text
+```text
 Conv3×3
 256 → 256
 ```
 
 方案 B：
 
-``` text
+```text
 Depthwise 3×3
 256 → 256
 
@@ -3130,11 +3231,15 @@ Pointwise 1×1
 
 方案 A：
 
-\[ 256`\times256`{=tex}`\times9`{=tex} \]
+$$
+256\times256\times9
+$$
 
 方案 B：
 
-\[ 256`\times9`{=tex} + 256`\times256`{=tex} \]
+$$
+256\times9 + 256\times256
+$$
 
 算出具体数字和比例。
 
@@ -3142,13 +3247,13 @@ Pointwise 1×1
 
 > 为什么 MobileNet、HGNetv2 的轻量模块会喜欢类似结构？
 
-------------------------------------------------------------------------
+---
 
 # 68. 课后作业 C：推导 HGNetv2-B5 的三个返回尺度
 
 从：
 
-``` text
+```text
 Input = 640×640
 Stem cumulative stride = 4
 ```
@@ -3157,7 +3262,7 @@ Stem cumulative stride = 4
 
 已知：
 
-``` text
+```text
 Stage1 downsample=False
 Stage2=True
 Stage3=True
@@ -3166,7 +3271,7 @@ Stage4=True
 
 要求自己推导：
 
-``` text
+```text
 Stage1
 Stage2
 Stage3
@@ -3175,30 +3280,30 @@ Stage4
 
 每一层的：
 
-``` text
+```text
 spatial size
 cumulative stride
 ```
 
 最后验证：
 
-``` text
+```text
 return_idx=[1,2,3]
 ```
 
 为什么对应：
 
-``` text
+```text
 stride [8,16,32]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 69. 课后作业 D：感受野
 
 假设网络：
 
-``` text
+```text
 Conv3×3 S=2
 Conv3×3 S=1
 Conv3×3 S=2
@@ -3207,7 +3312,7 @@ Conv3×3 S=1
 
 从：
 
-``` text
+```text
 r0=1
 j0=1
 ```
@@ -3216,26 +3321,30 @@ j0=1
 
 使用：
 
-\[ j_l=j\_{l-1}S_l \]
+$$
+j_l=j_{l-1}S_l
+$$
 
-\[ r_l=r\_{l-1}+(K_l-1)j\_{l-1} \]
+$$
+r_l=r_{l-1}+(K_l-1)j_{l-1}
+$$
 
 计算每层：
 
-``` text
+```text
 jump
 receptive field
 ```
 
 不要跳步骤。
 
-------------------------------------------------------------------------
+---
 
 # 70. 课后作业 E：把第 2、3 课连接起来
 
 假设 HybridEncoder 已把三层 feature 投影成：
 
-``` text
+```text
 [B,384,80,80]
 [B,384,40,40]
 [B,384,20,20]
@@ -3243,7 +3352,7 @@ receptive field
 
 请手写 PyTorch：
 
-``` text
+```text
 ① flatten spatial dims
 ② 转成 [B,N,C]
 ③ cat
@@ -3251,81 +3360,96 @@ receptive field
 
 最后必须得到：
 
-``` text
+```text
 [B,8400,384]
 ```
 
 然后解释：
 
-``` text
+```text
 8400
 384
 ```
 
 分别代表什么。
 
-------------------------------------------------------------------------
+---
 
 # 71. 本课 Cheat Sheet
 
 ## 卷积输出
 
-\[ O= `\left`{=tex}`\lfloor`{=tex} `\frac{
-I+2P-D(K-1)-1
-}{S}`{=tex}+1 `\right`{=tex}`\rfloor`{=tex} \]
+$$
+O= \left\lfloor \frac{ I+2P-D(K-1)-1 }{S}+1 \right\rfloor
+$$
 
-------------------------------------------------------------------------
+---
 
 ## 有效 Kernel
 
-\[ K\_{eff}=D(K-1)+1 \]
+$$
+K_{eff}=D(K-1)+1
+$$
 
-------------------------------------------------------------------------
+---
 
 ## 普通 Conv 参数量（无 bias）
 
-\[ Params = C\_{out} C\_{in} K_hK_w \]
+$$
+Params = C_{out} C_{in} K_hK_w
+$$
 
-------------------------------------------------------------------------
+---
 
 ## Group Conv 参数量
 
-\[ Params = C\_{out} `\frac{C_{in}}{groups}`{=tex} K_hK_w \]
+$$
+Params = C_{out} \frac{C_{in}}{groups} K_hK_w
+$$
 
-------------------------------------------------------------------------
+---
 
 ## Depthwise Conv（典型 Cin=Cout=groups=C）
 
-\[ Params = CK_hK_w \]
+$$
+Params = CK_hK_w
+$$
 
-------------------------------------------------------------------------
+---
 
 ## Conv MACs 粗略公式
 
-\[ MACs = H\_{out}W\_{out} C\_{out} `\frac{C_{in}}{groups}`{=tex} K_hK_w
-\]
+$$
+MACs = H_{out}W_{out} C_{out} \frac{C_{in}}{groups} K_hK_w
+$$
 
-------------------------------------------------------------------------
+---
 
 ## 累计 stride
 
-\[ S\_{total} = `\prod`{=tex}\_l S_l \]
+$$
+S_{total} = \prod_l S_l
+$$
 
-------------------------------------------------------------------------
+---
 
 ## 理论感受野
 
-\[ j_l=j\_{l-1}S_l \]
+$$
+j_l=j_{l-1}S_l
+$$
 
-\[ r_l = r\_{l-1} + (K\_{eff,l}-1)j\_{l-1} \]
+$$
+r_l = r_{l-1} + (K_{eff,l}-1)j_{l-1}
+$$
 
-------------------------------------------------------------------------
+---
 
 # 72. 第 3 课结束后，你应该能看懂什么？
 
 当以后看到：
 
-``` python
+```python
 self.downsample = ConvBNAct(
     in_chs,
     in_chs,
@@ -3342,7 +3466,7 @@ self.downsample = ConvBNAct(
 
 而应该立刻读出：
 
-``` text
+```text
 ① Cin=Cout=in_chs
    → channel 数不变
 
@@ -3364,17 +3488,17 @@ self.downsample = ConvBNAct(
 
 这就是从：
 
-``` text
+```text
 会看 Python
 ```
 
 进步到：
 
-``` text
+```text
 会读神经网络源码
 ```
 
-------------------------------------------------------------------------
+---
 
 # 73. 下一课预告
 
@@ -3382,32 +3506,40 @@ self.downsample = ConvBNAct(
 
 下一课将正式从：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 推导：
 
-\[ Attention(Q,K,V) = softmax `\left`{=tex}(
-`\frac{QK^T}{\sqrt{d_k}}`{=tex} `\right`{=tex})V \]
+$$
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax} \left(
+\frac{QK^T}{\sqrt{d_k}} \right)V
+$$
 
 并且会拿真实 shape：
 
-``` text
+```text
 [B,1600,256]
 ```
 
 拆成：
 
-``` text
+```text
 [B,8,1600,32]
 ```
 
 逐步计算：
 
-``` text
+```text
 QKᵀ
 softmax
 attention weights
@@ -3420,7 +3552,7 @@ FFN
 
 最后自己不用：
 
-``` python
+```python
 nn.MultiheadAttention
 ```
 
@@ -3428,19 +3560,19 @@ nn.MultiheadAttention
 
 学完第 4 课，我们就具备进入 DETR 的两块最基础积木：
 
-``` text
+```text
 CNN
 +
 Transformer
 ```
 
-------------------------------------------------------------------------
+---
 
 # 附录 A：本课真实源码依据
 
 本课关于 HGNetv2 的结构说明依据官方实现中的：
 
-``` text
+```text
 ConvBNAct
 LightConvBNAct
 StemBlock
@@ -3454,13 +3586,13 @@ HGNetv2
 
 官方实现明确给出了：
 
-``` python
+```python
 self._out_strides = [4, 8, 16, 32]
 ```
 
 以及 B5 的 stage 配置：
 
-``` text
+```text
 Stage1: out=128,  downsample=False
 Stage2: out=512,  downsample=True
 Stage3: out=1024, downsample=True
@@ -3469,7 +3601,7 @@ Stage4: out=2048, downsample=True
 
 因此对于 `640×640` 输入以及常见 `return_idx=[1,2,3]`：
 
-``` text
+```text
 Stage2 → [B,512,80,80]
 Stage3 → [B,1024,40,40]
 Stage4 → [B,2048,20,20]
@@ -3477,35 +3609,29 @@ Stage4 → [B,2048,20,20]
 
 这是由源码配置和 stride 关系直接推导出的 shape。
 
-------------------------------------------------------------------------
+---
 
 # 附录 B：参考资料
 
 优先使用官方/一手资料：
 
-1.  DEIMv2 官方仓库\
-    https://github.com/Intellindust-AI-Lab/DEIMv2
-
-2.  DEIM 官方 HGNetv2 实现\
-    https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/backbone/hgnetv2.py
-
-3.  DEIM 的 `deim_hgnetv2_x_coco.yml`\
-    https://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/deim_dfine/deim_hgnetv2_x_coco.yml
-
-4.  DEIMv2 README（当前模型 Backbone 说明）\
-    https://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/README.md
+1. DEIMv2 官方仓库https://github.com/Intellindust-AI-Lab/DEIMv2
+2. DEIM 官方 HGNetv2 实现https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/backbone/hgnetv2.py
+3. DEIM 的 `deim_hgnetv2_x_coco.yml`https://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/deim_dfine/deim_hgnetv2_x_coco.yml
+4. DEIMv2 README（当前模型 Backbone 说明）
+   https://github.com/Intellindust-AI-Lab/DEIMv2/blob/main/README.md
 
 > 注：第 3 课的目标是 CNN 与多尺度 shape 基础，因此只抽取 HGNetv2
 > 中与卷积、下采样和多尺度输出直接相关的真实结构。HGNetv2-B5 的每个
 > Stem/HGBlock/Stage 将在第 9 课按真实 forward 调用顺序进一步逐行展开。
 
-------------------------------------------------------------------------
+---
 
 **第 3 课结束。**
 
 如果你现在看到：
 
-``` text
+```text
 [B,3,640,640]
 →
 [B,512,80,80]
@@ -3515,7 +3641,7 @@ Stage4 → [B,2048,20,20]
 
 已经能够解释：
 
-``` text
+```text
 为什么空间尺寸会这样变化，
 为什么 channel 会变化，
 stride 8/16/32 是怎样累计出来的，

@@ -1,9 +1,10 @@
 # DEIMv2 源码课程 · 第 14 课
+
 # 把 `deim_dfine_x` 从输入到 Loss 完整走一遍
 
 > **本课目标**
 >
-> 前 9～13 课已经分别拆过 `HGNetv2 → HybridEncoder → DFINETransformer → FDR → GO-LSD`。  
+> 前 9～13 课已经分别拆过 `HGNetv2 → HybridEncoder → DFINETransformer → FDR → GO-LSD`。
 > 这一课不再孤立地看模块，而是把 **`deim_dfine_x` 的一次完整训练 forward** 串成一条闭环：
 >
 > ```text
@@ -94,7 +95,7 @@ reg_scale = 8         # X override
 
 > **重要：训练时实际输入不一定永远是 640×640。**
 >
-> DEIM 的 collate / augmentation recipe 可以使用 multi-scale 等策略。  
+> DEIM 的 collate / augmentation recipe 可以使用 multi-scale 等策略。
 > 所以下文 `80×80 / 40×40 / 20×20 / 8400` 是在 **当前 batch 输入恰好为 640×640** 时的具体数字。
 >
 > 一旦输入尺寸变化，空间维度和 token 数也会变化；但所有推导规则完全相同。
@@ -325,7 +326,7 @@ scalar losses
 
 其中：
 
-\[
+$$
 8400
 =
 80\times80
@@ -333,21 +334,21 @@ scalar losses
 40\times40
 +
 20\times20
-\]
+$$
 
 即：
 
-\[
+$$
 6400+1600+400=8400
-\]
+$$
 
 而：
 
-\[
+$$
 132
 =
 4\times(32+1)
-\]
+$$
 
 即：
 
@@ -543,17 +544,17 @@ C5:
 
 因为：
 
-\[
+$$
 640/8=80
-\]
+$$
 
-\[
+$$
 640/16=40
-\]
+$$
 
-\[
+$$
 640/32=20
-\]
+$$
 
 ---
 
@@ -743,9 +744,9 @@ P3
 
 空间位置：
 
-\[
+$$
 80\times80=6400
-\]
+$$
 
 flatten 后：
 
@@ -780,9 +781,9 @@ P4
 [2,384,40,40]
 ```
 
-\[
+$$
 40\times40=1600
-\]
+$$
 
 得到：
 
@@ -799,9 +800,9 @@ P5
 [2,384,20,20]
 ```
 
-\[
+$$
 20\times20=400
-\]
+$$
 
 得到：
 
@@ -832,9 +833,9 @@ memory
 
 其中：
 
-\[
+$$
 6400+1600+400=8400
-\]
+$$
 
 这就是以后看到：
 
@@ -1041,10 +1042,10 @@ reference boxes
 
 # 22. Top-K 的比例有多稀疏？
 
-\[
+$$
 300/8400
 \approx0.035714
-\]
+$$
 
 即：
 
@@ -1344,9 +1345,9 @@ num_points = [3,6,3]
 
 每个 head 每个 query 总采样点：
 
-\[
+$$
 3+6+3=12
-\]
+$$
 
 ---
 
@@ -1942,7 +1943,7 @@ cost_giou: 2
 
 所以概念上：
 
-\[
+$$
 C_{ij}
 =
 2C_{cls}
@@ -1950,16 +1951,16 @@ C_{ij}
 5C_{L1}
 +
 2C_{GIoU}
-\]
+$$
 
 然后求：
 
-\[
+$$
 \sigma^*
 =
 \arg\min_\sigma
 \sum_i C_{i,\sigma(i)}
-\]
+$$
 
 ---
 
@@ -1999,9 +2000,9 @@ Batch 1:
 
 因此单层直接 positive assignment 极其稀疏：
 
-\[
+$$
 18/600=3\%
-\]
+$$
 
 这正是后面 DEIM Dense O2O 要解决的核心背景之一。
 
@@ -2365,7 +2366,7 @@ target_boxes
 
 计算：
 
-\[
+$$
 L_{bbox}
 =
 \frac{1}{N}
@@ -2373,7 +2374,7 @@ L_{bbox}
 \left|
 b-\hat b
 \right|
-\]
+$$
 
 源码：
 
@@ -2431,11 +2432,11 @@ xyxy
 
 再：
 
-\[
+$$
 L_{GIoU}
 =
 1-GIoU
-\]
+$$
 
 源码逻辑：
 
@@ -2671,7 +2672,7 @@ Criterion 会先乘各自权重。
 
 概念：
 
-\[
+$$
 L
 =
 1L_{MAL}
@@ -2684,7 +2685,7 @@ L
 +
 1.5L_{ddf}
 +\cdots
-\]
+$$
 
 ---
 
@@ -3439,11 +3440,11 @@ main detector lr = 5e-4
 
 比例：
 
-\[
+$$
 \frac{5\times10^{-4}}{5\times10^{-6}}
 =
 100
-\]
+$$
 
 也就是 detector 的 base LR 是 backbone LR 的：
 
@@ -3970,7 +3971,7 @@ print(l1)
 
 手算：
 
-\[
+$$
 |0.50-0.45|
 +
 |0.50-0.52|
@@ -3978,14 +3979,14 @@ print(l1)
 |0.40-0.35|
 +
 |0.30-0.28|
-\]
+$$
 
-\[
+$$
 =
 0.05+0.02+0.05+0.02
 =
 0.14
-\]
+$$
 
 ---
 
@@ -4299,16 +4300,16 @@ total loss
 例如：
 
 | Group | Loss | Value |
-|---|---|---:|
-| Main | MAL | ... |
-| Main | bbox | ... |
-| Main | GIoU | ... |
-| Main | FGL | ... |
-| Aux 0 | MAL | ... |
-| Aux 0 | bbox | ... |
-| Aux 0 | DDF | ... |
-| ... | ... | ... |
-| DN | MAL | ... |
+| ----- | ---- | ----: |
+| Main  | MAL  |   ... |
+| Main  | bbox |   ... |
+| Main  | GIoU |   ... |
+| Main  | FGL  |   ... |
+| Aux 0 | MAL  |   ... |
+| Aux 0 | bbox |   ... |
+| Aux 0 | DDF  |   ... |
+| ...   | ...  |   ... |
+| DN    | MAL  |   ... |
 
 这样你能快速发现：
 
@@ -4778,31 +4779,31 @@ input=640×640
 COCO=80 classes
 ```
 
-| Stage | Tensor | Shape |
-|---|---|---:|
-| Input | images | `[2,3,640,640]` |
-| HGNetv2 | C3 | `[2,512,80,80]` |
-| HGNetv2 | C4 | `[2,1024,40,40]` |
-| HGNetv2 | C5 | `[2,2048,20,20]` |
-| HybridEncoder | P3 | `[2,384,80,80]` |
-| HybridEncoder | P4 | `[2,384,40,40]` |
-| HybridEncoder | P5 | `[2,384,20,20]` |
-| Flatten | P3 tokens | `[2,6400,384]` |
-| Flatten | P4 tokens | `[2,1600,384]` |
-| Flatten | P5 tokens | `[2,400,384]` |
-| Concat | memory | `[2,8400,384]` |
-| Proposal | class | approx `[2,8400,80]` |
-| Proposal | box | approx `[2,8400,4]` |
-| Top-K | indices | `[2,300]` |
-| Matching Query | query/reference | 300 queries |
-| Decoder | layer logits | `[2,300,80]` |
-| Decoder | layer boxes | `[2,300,4]` |
-| FDR | layer corners | `[2,300,132]` |
-| FDR reshape | distributions | `[2,300,4,33]` |
-| Final | pred_logits | `[2,300,80]` |
-| Final | pred_boxes | `[2,300,4]` |
-| Final | pred_corners | `[2,300,132]` |
-| Criterion | each loss | scalar |
+| Stage          | Tensor          |                 Shape |
+| -------------- | --------------- | --------------------: |
+| Input          | images          |     `[2,3,640,640]` |
+| HGNetv2        | C3              |     `[2,512,80,80]` |
+| HGNetv2        | C4              |    `[2,1024,40,40]` |
+| HGNetv2        | C5              |    `[2,2048,20,20]` |
+| HybridEncoder  | P3              |     `[2,384,80,80]` |
+| HybridEncoder  | P4              |     `[2,384,40,40]` |
+| HybridEncoder  | P5              |     `[2,384,20,20]` |
+| Flatten        | P3 tokens       |      `[2,6400,384]` |
+| Flatten        | P4 tokens       |      `[2,1600,384]` |
+| Flatten        | P5 tokens       |       `[2,400,384]` |
+| Concat         | memory          |      `[2,8400,384]` |
+| Proposal       | class           | approx`[2,8400,80]` |
+| Proposal       | box             |  approx`[2,8400,4]` |
+| Top-K          | indices         |           `[2,300]` |
+| Matching Query | query/reference |           300 queries |
+| Decoder        | layer logits    |        `[2,300,80]` |
+| Decoder        | layer boxes     |         `[2,300,4]` |
+| FDR            | layer corners   |       `[2,300,132]` |
+| FDR reshape    | distributions   |      `[2,300,4,33]` |
+| Final          | pred_logits     |        `[2,300,80]` |
+| Final          | pred_boxes      |         `[2,300,4]` |
+| Final          | pred_corners    |       `[2,300,132]` |
+| Criterion      | each loss       |                scalar |
 
 > DN queries 未写进固定 shape 表，因为其实际数量取决于当前 batch 的 GT / denoising group 构造。
 
@@ -5015,25 +5016,25 @@ what + where
 
 真正应该记住的是推导：
 
-\[
+$$
 H_l = H / stride_l
-\]
+$$
 
-\[
+$$
 N_l = H_lW_l
-\]
+$$
 
-\[
+$$
 N_{memory}
 =
 \sum_l H_lW_l
-\]
+$$
 
-\[
+$$
 D_{FDR}
 =
 4(reg\_max+1)
-\]
+$$
 
 所以输入换成：
 
@@ -5069,11 +5070,11 @@ stride：
 
 总数：
 
-\[
+$$
 10000+2500+625
 =
 13125
-\]
+$$
 
 因此：
 
@@ -5100,9 +5101,9 @@ memory
 
 四边：
 
-\[
+$$
 4\times17=68
-\]
+$$
 
 所以：
 
@@ -5213,11 +5214,11 @@ Hungarian matching 的 candidate 数也从：
 
 总 positions：
 
-\[
+$$
 1600+400+100
 =
 2100
-\]
+$$
 
 所以：
 
@@ -5240,17 +5241,17 @@ Top-K：
 
 640：
 
-\[
+$$
 300/8400
 \approx3.57\%
-\]
+$$
 
 320：
 
-\[
+$$
 300/2100
 \approx14.29\%
-\]
+$$
 
 所以固定 Query 数在不同输入 resolution 下对应：
 
@@ -5576,7 +5577,7 @@ train.py
 
 推荐：
 
-### Step 1
+Step 1、
 
 断点：
 
@@ -5591,7 +5592,7 @@ images
 targets
 ```
 
-### Step 2
+Step 2、
 
 执行：
 
@@ -5601,7 +5602,7 @@ x = self.backbone(x)
 
 记录三层 shape。
 
-### Step 3
+Step 3、
 
 执行：
 
@@ -5611,7 +5612,7 @@ x = self.encoder(x)
 
 记录三层 shape。
 
-### Step 4
+Step 4、
 
 进入：
 
@@ -5628,7 +5629,7 @@ topk indices
 reference boxes
 ```
 
-### Step 5
+Step 5、
 
 进入：
 
@@ -5638,7 +5639,7 @@ TransformerDecoder.forward
 
 只跟踪一个 layer。
 
-### Step 6
+Step 6、
 
 看：
 
@@ -5648,7 +5649,7 @@ out_bboxes
 out_corners
 ```
 
-### Step 7
+Step 7、
 
 退出 model，进入：
 
@@ -5656,7 +5657,7 @@ out_corners
 DEIMCriterion.forward
 ```
 
-### Step 8
+Step 8、
 
 打印：
 
@@ -5666,7 +5667,7 @@ cached_indices
 indices_go
 ```
 
-### Step 9
+Step 9、
 
 分别进入：
 
@@ -5676,7 +5677,7 @@ loss_boxes
 loss_local
 ```
 
-### Step 10
+Step 10、
 
 看最终：
 
@@ -6307,39 +6308,21 @@ boxes/local
 
 # 164. 参考资料
 
-1. DEIM official repository  
-   https://github.com/Intellindust-AI-Lab/DEIM
-
-2. DEIM model container  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/deim.py
-
-3. DEIM `DFINETransformer`  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/dfine_decoder.py
-
-4. DEIM Criterion  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/deim_criterion.py
-
-5. HGNetv2 implementation  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/backbone/hgnetv2.py
-
-6. Base D-FINE HGNetv2 config  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/base/dfine_hgnetv2.yml
-
-7. DEIM base training config  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/base/deim.yml
-
-8. DEIM HGNetv2-X COCO config  
-   https://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/deim_dfine/deim_hgnetv2_x_coco.yml
-
-9. D-FINE official repository  
-   https://github.com/Peterande/D-FINE
-
-10. D-FINE X reference config  
+1. DEIM official repositoryhttps://github.com/Intellindust-AI-Lab/DEIM
+2. DEIM model containerhttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/deim.py
+3. DEIM `DFINETransformer`https://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/dfine_decoder.py
+4. DEIM Criterionhttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/deim/deim_criterion.py
+5. HGNetv2 implementationhttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/engine/backbone/hgnetv2.py
+6. Base D-FINE HGNetv2 confighttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/base/dfine_hgnetv2.yml
+7. DEIM base training confighttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/base/deim.yml
+8. DEIM HGNetv2-X COCO confighttps://github.com/Intellindust-AI-Lab/DEIM/blob/main/configs/deim_dfine/deim_hgnetv2_x_coco.yml
+9. D-FINE official repositoryhttps://github.com/Peterande/D-FINE
+10. D-FINE X reference config
     https://github.com/Peterande/D-FINE/blob/master/configs/dfine/dfine_hgnetv2_x_coco.yml
 
 > **版本说明**
 >
-> DEIM / DEIMv2 仓库仍会更新。课程中的固定数字均说明了对应假设。  
+> DEIM / DEIMv2 仓库仍会更新。课程中的固定数字均说明了对应假设。
 > 当你的本地 checkout 与这里不同，应以：
 >
 > ```text
@@ -6347,5 +6330,4 @@ boxes/local
 > 2. 当前源码
 > 3. debugger / forward hook 的真实 Tensor shape
 > ```
->
 > 为最高依据，而不要强行让运行结果去匹配讲义中的某个历史版本数字。

@@ -82,7 +82,9 @@ DEIMTransformer
 
 三尺度总位置：
 
-\[ 80^2+40^2+20\^2 = 6400+1600+400 = 8400 \]
+$$
+80^2+40^2+20^2 = 6400+1600+400 = 8400
+$$
 
 所以本课最核心的数字链是：
 
@@ -478,15 +480,21 @@ anchors = torch.log(
 
 即：
 
-\[ logit(p)=`\ln`{=tex}`\frac{p}{1-p}`{=tex} \]
+$$
+logit(p)=\ln\frac{p}{1-p}
+$$
 
 这样 bbox head 可以预测 unconstrained residual：
 
-\[ z'=z+`\Delta `{=tex}z \]
+$$
+z'=z+\Delta z
+$$
 
 再：
 
-\[ p'=`\sigma`{=tex}(z') \]
+$$
+p'=\sigma(z')
+$$
 
 把结果映射回合法 `[0,1]`。
 
@@ -738,13 +746,17 @@ RMSNorm
 
 LayerNorm：
 
-\[ `\hat{x}`{=tex} = `\frac{x-\mu}`{=tex}
-{`\sqrt{\sigma^2+\epsilon}`{=tex}} \]
+$$
+\hat{x} = \frac{x-\mu}
+{\sqrt{\sigma^2+\epsilon}}
+$$
 
 RMSNorm 的核心：
 
-\[ `\hat{x}`{=tex} = `\frac{x}`{=tex}
-{`\sqrt{\frac{1}{d}\sum_i x_i^2+\epsilon}`{=tex}} \]
+$$
+\hat{x} = \frac{x}
+{\sqrt{\frac{1}{d}\sum_i x_i^2+\epsilon}}
+$$
 
 区别：
 
@@ -779,7 +791,9 @@ self.swish_ffn = SwiGLUFFN(...)
 
 SwiGLU 的核心直觉：
 
-\[ SwiGLU(x) = SiLU(xW_1)`\odot`{=tex}(xW_2) \]
+$$
+SwiGLU(x) = SiLU(xW_1)\odot(xW_2)
+$$
 
 然后再输出投影。
 
@@ -848,11 +862,15 @@ else:
 
 普通 residual：
 
-\[ x'=x+`\Delta `{=tex}x \]
+$$
+x'=x+\Delta x
+$$
 
 Gate 风格则更接近：
 
-\[ x'=G(x,`\Delta `{=tex}x) \]
+$$
+x'=G(x,\Delta x)
+$$
 
 让模型学习：
 
@@ -1040,19 +1058,25 @@ stride 32 → 3 points
 
 所以每个 head、每个 query：
 
-\[ 3+6+3=12 \]
+$$
+3+6+3=12
+$$
 
 个 sampling points。
 
 X 默认 8 heads：
 
-\[ 300`\times8`{=tex}`\times12`{=tex} = 28,800 \]
+$$
+300\times8\times12 = 28,800
+$$
 
 个 query-head-point 采样单位/层。
 
 而 dense query-memory pair：
 
-\[ 300`\times8400`{=tex} = 2,520,000 \]
+$$
+300\times8400 = 2,520,000
+$$
 
 这就是 Multi-Scale Deformable Attention 对实时 DETR 的关键价值。
 
@@ -1116,8 +1140,10 @@ if i == 0:
 
 公式：
 
-\[ B\_{pre} = `\sigma`{=tex} `\left`{=tex}( f\_{pre}(Q_0) +
-`\sigma`{=tex}\^{-1}(R_0) `\right`{=tex}) \]
+$$
+B_{pre} = \sigma \left( f_{pre}(Q_0) +
+\sigma^{-1}(R_0) \right)
+$$
 
 这是进入 FDR 精细分布回归前的一次普通 4D refinement。
 
@@ -1171,7 +1197,9 @@ reg_max + 1 = 33 bins
 
 所以：
 
-\[ 4`\times33`{=tex}=132 \]
+$$
+4\times33=132
+$$
 
 bbox distribution head：
 
@@ -1644,34 +1672,42 @@ Dense O2O 是训练优化，不改变最终 O2O detector 的性质。
 
 设：
 
-\[
-Q_l`\in`{=tex}`\mathbb{R}`{=tex}\^{B`\times `{=tex}N_q`\times `{=tex}C}
-\]
+$$
+Q_l\in\mathbb{R}^{B\times N_q\times C}
+$$
 
 reference boxes：
 
-\[
-R_l`\in`{=tex}`\mathbb{R}`{=tex}\^{B`\times `{=tex}N_q`\times4`{=tex}}
-\]
+$$
+R_l\in\mathbb{R}^{B\times N_q\times4}
+$$
 
 位置 embedding：
 
-\[ P_l=f\_{pos}(R_l) \]
+$$
+P_l=f_{pos}(R_l)
+$$
 
 Self-Attention：
 
-\[ `\tilde `{=tex}Q_l = RMSNorm `\left`{=tex}( Q_l+ SA(Q_l+P_l)
-`\right`{=tex}) \]
+$$
+\tilde Q_l = RMSNorm \left( Q_l+ SA(Q_l+P_l)
+\right)
+$$
 
 Cross-Attention：
 
-\[ `\hat `{=tex}Q_l = Fuse `\left`{=tex}( `\tilde `{=tex}Q_l,
-DA(`\tilde `{=tex}Q_l+P_l,R_l,M) `\right`{=tex}) \]
+$$
+\hat Q_l = Fuse \left( \tilde Q_l,
+DA(\tilde Q_l+P_l,R_l,M) \right)
+$$
 
 FFN：
 
-\[ Q\_{l+1} = RMSNorm `\left`{=tex}( `\hat `{=tex}Q_l+
-SwiGLU(`\hat `{=tex}Q_l) `\right`{=tex}) \]
+$$
+Q_{l+1} = RMSNorm \left( \hat Q_l+
+SwiGLU(\hat Q_l) \right)
+$$
 
 其中：
 
@@ -1687,20 +1723,28 @@ DA = MSDeformableAttention
 
 先：
 
-\[ B\_{pre} = `\sigma`{=tex} `\left`{=tex}( f\_{pre}(Q_0) +
-`\sigma`{=tex}\^{-1}(R_0) `\right`{=tex}) \]
+$$
+B_{pre} = \sigma \left( f_{pre}(Q_0) +
+\sigma^{-1}(R_0) \right)
+$$
 
 再做 distribution refinement：
 
-\[ D_l = f\_{bbox}\^{(l)}(Q_l) + D\_{l-1} \]
+$$
+D_l = f_{bbox}^{(l)}(Q_l) + D_{l-1}
+$$
 
 Integral：
 
-\[ d_l=Integral(D_l) \]
+$$
+d_l=Integral(D_l)
+$$
 
 最后：
 
-\[ B_l = distance2bbox( B\_{pre}, d_l ) \]
+$$
+B_l = distance2bbox( B_{pre}, d_l )
+$$
 
 这就是 DEIMTransformer 当前仍保留的 D-FINE/FDR 主干。
 
@@ -1826,7 +1870,9 @@ hidden_dim  = 256
 
 Self-Attention 近似：
 
-\[ O(N_q\^2) \]
+$$
+O(N_q^2)
+$$
 
 只看 query-pair 数：
 
@@ -2190,9 +2236,13 @@ AMP 并不只是 trainer 外面包 autocast
 
 inverse sigmoid 在 0/1 附近会趋向无穷：
 
-\[ logit(0)=-`\infty`{=tex} \]
+$$
+logit(0)=-\infty
+$$
 
-\[ logit(1)=+`\infty`{=tex} \]
+$$
+logit(1)=+\infty
+$$
 
 所以源码会检查：
 

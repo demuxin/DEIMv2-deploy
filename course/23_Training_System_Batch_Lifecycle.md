@@ -496,11 +496,15 @@ world_size = 4
 
 `YAMLConfig.get_rank_batch_size()`：
 
-\[ B\_{rank} = `\frac{B_{total}}{world\_size}`{=tex} \]
+$$
+B_{rank} = \frac{B_{total}}{world\_size}
+$$
 
 所以：
 
-\[ 32/4=8 \]
+$$
+32/4=8
+$$
 
 每个 rank 的 DataLoader：
 
@@ -1018,7 +1022,9 @@ images.roll(
 
 再：
 
-\[ I'*i = `\beta `{=tex}I_i + (1-`\beta`{=tex})I*{i-1} \]
+$$
+I'_i = \beta I_i + (1-\beta)I_{i-1}
+$$
 
 当前 beta 随机范围：
 
@@ -1580,7 +1586,9 @@ Matching cost：
 
 例如：
 
-\[ C = 2C\_{cls} + 5C\_{L1} + 2C\_{GIoU} \]
+$$
+C = 2C_{cls} + 5C_{L1} + 2C_{GIoU}
+$$
 
 真正训练 loss：
 
@@ -1740,7 +1748,9 @@ optimizer.step()
 
 数学上：
 
-\[ g_t = `\nabla`{=tex}\_`\theta`{=tex} L(`\theta`{=tex}\_t) \]
+$$
+g_t = \nabla_\theta L(\theta_t)
+$$
 
 然后 AdamW 根据：
 
@@ -1796,11 +1806,15 @@ scaler.scale(
 
 核心是：
 
-\[ L\_{scaled} = sL \]
+$$
+L_{scaled} = sL
+$$
 
 所以：
 
-\[ `\nabla`{=tex}(sL) = s`\nabla `{=tex}L \]
+$$
+\nabla(sL) = s\nabla L
+$$
 
 把小梯度放大，降低 FP16 underflow 风险。
 
@@ -1863,7 +1877,9 @@ clip_max_norm: 0.1
 
 所以：
 
-\[ \|g\|\_2 \> 0.1 \]
+$$
+\|g\|_2 > 0.1
+$$
 
 时会按比例缩放整体梯度，使 norm 不超过阈值。
 
@@ -1898,17 +1914,23 @@ gradient clipping
 
 一阶矩：
 
-\[ m_t = `\beta`{=tex}*1m*{t-1} + (1-`\beta`{=tex}\_1)g_t \]
+$$
+m_t = \beta_1 m_{t-1} + (1-\beta_1)g_t
+$$
 
 二阶矩：
 
-\[ v_t = `\beta`{=tex}*2v*{t-1} + (1-`\beta`{=tex}\_2)g_t\^2 \]
+$$
+v_t = \beta_2 v_{t-1} + (1-\beta_2)g_t^2
+$$
 
 参数更新近似：
 
-\[ `\theta`{=tex}\_{t+1} = `\theta`{=tex}\_t - `\eta`{=tex}
-`\frac{\hat m_t}`{=tex} {`\sqrt{\hat v_t}`{=tex}+`\epsilon`{=tex}} -
-`\eta`{=tex}`\lambda`{=tex}`\theta`{=tex}\_t \]
+$$
+\theta_{t+1} = \theta_t - \eta
+\frac{\hat m_t} {\sqrt{\hat v_t}+\epsilon} -
+\eta\lambda\theta_t
+$$
 
 最后一项体现 decoupled weight decay。
 
@@ -1927,8 +1949,10 @@ if ema is not None:
 
 EMA 参数：
 
-\[ `\theta`{=tex}\^{EMA}*t = d`\theta`{=tex}\^{EMA}*{t-1} +
-(1-d)`\theta`{=tex}\_t \]
+$$
+\theta^{EMA}_t = d\theta^{EMA}_{t-1} +
+(1-d)\theta_t
+$$
 
 ------------------------------------------------------------------------
 
@@ -2627,7 +2651,9 @@ AR...
 
 其中主 AP：
 
-\[ AP = `\text{mean AP over IoU thresholds}`{=tex} \]
+$$
+AP = \text{mean AP over IoU thresholds}
+$$
 
 通常从：
 
@@ -2914,7 +2940,9 @@ GT counts:
 
 总 GT：
 
-\[ 12+5+9+17+4+23+7+11=88 \]
+$$
+12+5+9+17+4+23+7+11=88
+$$
 
 如果 MixUp：
 
@@ -3013,9 +3041,11 @@ rank3 batch → g3
 
 DDP 归约后概念：
 
-\[ g = `\frac{
+$$
+g = \frac{
 g_0+g_1+g_2+g_3
-}{4}`{=tex} \]
+}{4}
+$$
 
 然后每个 rank 都用同步后的 gradient 更新自己的 model replica。
 
@@ -3711,8 +3741,10 @@ strong augmentation → clean fine-tuning
 
 一个 iteration：
 
-\[ T\_{iter} = T\_{data} + T\_{H2D} + T\_{forward} + T\_{criterion} +
-T\_{backward} + T\_{optimizer} + T\_{communication} \]
+$$
+T_{iter} = T_{data} + T_{H2D} + T_{forward} + T_{criterion} +
+T_{backward} + T_{optimizer} + T_{communication}
+$$
 
 所以 GPU 利用率低，不一定是模型慢。
 
@@ -4556,7 +4588,9 @@ world_size = 4
 
 则：
 
-\[ B\_{rank}=8 \]
+$$
+B_{rank}=8
+$$
 
 如果每个 rank 每秒处理：
 
@@ -4566,7 +4600,9 @@ r images/s
 
 理想全局 throughput 约：
 
-\[ 4r \]
+$$
+4r
+$$
 
 但真实情况受：
 
@@ -4599,7 +4635,9 @@ i=200
 
 则：
 
-\[ global_step = 3`\times1000`{=tex}+200 = 3200 \]
+$$
+global_step = 3\times1000+200 = 3200
+$$
 
 TensorBoard、scheduler、warmup 常用这个统一时间坐标。
 

@@ -304,9 +304,9 @@ STA output pyramid
 
 总数：
 
-\[
+$$
 6400+1600+400=8400
-\]
+$$
 
 feature map 转 token：
 
@@ -374,9 +374,9 @@ level_start_index = [0,6400,8000]
 
 概念上：
 
-\[
+$$
 C_l' = C_l + E_l
-\]
+$$
 
 教学代码：
 
@@ -419,9 +419,9 @@ vit + spatial
 
 必须建立位置对应关系。完整 cross-attention 又需要处理约：
 
-\[
+$$
 1600	imes8400=13,440,000
-\]
+$$
 
 个 query-key pair（尚未乘 heads/batch），因此 sparse/deformable interaction 非常自然。
 
@@ -467,9 +467,9 @@ N_query × N_all_spatial
 
 可以用一个抽象公式理解：
 
-\[
+$$
 X' = X + \gamma\,DA(Q=X,V=C)
-\]
+$$
 
 其中：
 
@@ -499,9 +499,9 @@ DA = deformable attention
 
 反方向：
 
-\[
+$$
 C' = C + DA(Q=C,V=X')
-\]
+$$
 
 也就是：
 
@@ -558,10 +558,10 @@ ViT patch 本身位于规则的 40×40 grid。
 
 例如 patch `(row=10,col=20)`，可以构造归一化中心：
 
-\[
-x=rac{20+0.5}{40},\qquad
-y=rac{10+0.5}{40}
-\]
+$$
+x=\frac{20+0.5}{40},\qquad
+y=\frac{10+0.5}{40}
+$$
 
 使用 `[0,1]` 坐标后，同一个位置可映射到：
 
@@ -617,9 +617,9 @@ reference_point + normalized_offset
 
 位置通常不是整数，因此用双线性插值：
 
-\[
+$$
 V(x,y)=\sum_{i,j}w_{ij}V(i,j)
-\]
+$$
 
 这使 sampling location 可微，offset 能通过 detection loss 学习。
 
@@ -1082,9 +1082,9 @@ scores = [B,1600,8400]
 
 每个 sample 已有：
 
-\[
-13.44	ext{ million}
-\]
+$$
+13.44\mathrm{ million}
+$$
 
 个 score。再乘 heads、保存反向传播中间量，成本迅速增加。
 
@@ -1283,9 +1283,9 @@ STA pyramid:
 
 总 detector positions：
 
-\[
+$$
 10000+2500+625=13125
-\]
+$$
 
 输入变大不仅增加 detector pyramid cost，还会增加 ViT global attention cost。
 
@@ -1550,34 +1550,35 @@ print(energy.shape)
 
 把 ViT state 记为：
 
-\[
+$$
 X_t
-\]
+$$
 
 spatial pyramid state 记为：
 
-\[
+$$
 C_t
-\]
+$$
 
 一次 interaction 可抽象为：
 
-\[
+$$
 X_{t+1}
 =
 F_{vit}
 \left(
 X_t + I(C_t,X_t)
-ight)
-\]
+
+\right)
+$$
 
 再：
 
-\[
+$$
 C_{t+1}
 =
 C_t + E(X_{t+1},C_t)
-\]
+$$
 
 其中：
 
@@ -1589,13 +1590,13 @@ F_vit = 一段 ViT blocks
 
 所以这是一个耦合系统：
 
-\[
+$$
 X_{t+1}=f(X_t,C_t)
-\]
+$$
 
-\[
+$$
 C_{t+1}=g(C_t,X_{t+1})
-\]
+$$
 
 
 ---

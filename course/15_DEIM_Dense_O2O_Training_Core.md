@@ -27,15 +27,15 @@ Dense O2O **不是**：
 
 所以它保持：
 
-\[
+$$
 M_i=1
-\]
+$$
 
 但增大：
 
-\[
+$$
 N_{\text{GT}}
-\]
+$$
 
 这就是 DEIM 最关键的思想。
 
@@ -65,27 +65,27 @@ GT5 ← q291
 
 教学上定义一个直观指标：
 
-\[
+$$
 \rho=\frac{N_{\text{positive}}}{N_{\text{query}}}
-\]
+$$
 
 O2O 下，只要 GT 数没有超过 Query 数：
 
-\[
+$$
 N_{\text{positive}}\approx N_{\text{GT}}
-\]
+$$
 
 因此：
 
-\[
+$$
 \rho\approx\frac{N_{\text{GT}}}{Q}
-\]
+$$
 
 这里：
 
-\[
+$$
 \rho=\frac6{300}=2\%
-\]
+$$
 
 这不是论文正式评价指标，只是帮助我们理解 sparse supervision。
 
@@ -109,9 +109,9 @@ queries  = 32 × 300 = 9600
 
 比例仍然：
 
-\[
+$$
 192/9600=2\%
-\]
+$$
 
 所以增大 batch 增加了总样本量，却没有改变**单张输入内部的 O2O 稀疏结构**。
 
@@ -123,19 +123,19 @@ queries  = 32 × 300 = 9600
 
 O2O 要求每个 target 的 positive match 数：
 
-\[
+$$
 M_i=1
-\]
+$$
 
 因此：
 
-\[
+$$
 N_{\text{positive}}
 =
 \sum_{i=1}^{N}M_i
 =
 N
-\]
+$$
 
 如果：
 
@@ -170,9 +170,9 @@ GT0
 
 如果每个 GT 平均匹配 \(M>1\) 个预测：
 
-\[
+$$
 N_{\text{positive}}^{O2M}\approx N\times M
-\]
+$$
 
 例如：
 
@@ -200,9 +200,9 @@ DEIM 问的是：
 
 普通 O2O：
 
-\[
+$$
 S=N\times1=N
-\]
+$$
 
 其中 \(S\) 是 positive supervision count。
 
@@ -222,10 +222,10 @@ N ↑
 
 即：
 
-\[
+$$
 S_{\text{Dense O2O}}=N'
 \quad,\quad N'>N
-\]
+$$
 
 所以：
 
@@ -305,15 +305,15 @@ O2O → O2M
 
 所以：
 
-\[
+$$
 M_i=1
-\]
+$$
 
 没变；变化的是：
 
-\[
+$$
 N:1\rightarrow4
-\]
+$$
 
 ---
 
@@ -340,9 +340,9 @@ D: 8 GT
 
 四张原图平均：
 
-\[
+$$
 (5+7+4+8)/4=6
-\]
+$$
 
 理想组合后：
 
@@ -363,9 +363,9 @@ Q = 300
 GT = 6
 ```
 
-\[
+$$
 6/300=2\%
-\]
+$$
 
 Mosaic 后假设：
 
@@ -373,9 +373,9 @@ Mosaic 后假设：
 GT = 24
 ```
 
-\[
+$$
 24/300=8\%
-\]
+$$
 
 也就是教学例子中：
 
@@ -420,9 +420,9 @@ GT = 24
 
 那么 positive-query ratio：
 
-\[
+$$
 21/300=7\%
-\]
+$$
 
 仍明显高于原始的：
 
@@ -482,30 +482,30 @@ N_GT 个 positive matches
 
 普通 O2O：
 
-\[
+$$
 C\in\mathbb{R}^{Q\times N}
-\]
+$$
 
 Dense O2O：
 
-\[
+$$
 C'\in\mathbb{R}^{Q\times N'}
-\]
+$$
 
 其中：
 
-\[
+$$
 N'>N
-\]
+$$
 
 但求解仍是：
 
-\[
+$$
 \sigma^*
 =
 \arg\min_\sigma
 \sum_i C_{i,\sigma(i)}
-\]
+$$
 
 没有把：
 
@@ -521,9 +521,9 @@ N'>N
 
 Composite image 中的 target：
 
-\[
+$$
 Y=\{y_1,y_2,\dots,y_{N'}\}
-\]
+$$
 
 仍是当前输入坐标系里的**不同 object instances**。
 
@@ -607,19 +607,19 @@ Dense O2O 做的是：
 
 Decoder self-attention 含有随 Query 数近似平方增长的部分：
 
-\[
+$$
 O(Q^2)
-\]
+$$
 
 例如：
 
-\[
+$$
 300^2=90,000
-\]
+$$
 
-\[
+$$
 600^2=360,000
-\]
+$$
 
 Query 翻倍，pair interactions 约变为 4 倍。
 
@@ -636,9 +636,9 @@ Dense O2O 更聪明的地方在于：
 
 O2O capacity：
 
-\[
+$$
 N_{\text{positive}}\le Q
-\]
+$$
 
 如果：
 
@@ -1518,15 +1518,15 @@ memory token count
 
 因为训练 recipe 的目标不是：
 
-\[
+$$
 \max N_{GT}
-\]
+$$
 
 而是：
 
-\[
+$$
 \max \text{useful supervision}
-\]
+$$
 
 有用监督还取决于：
 
@@ -1626,9 +1626,9 @@ mosaic: 24
 
 理想 densification：
 
-\[
+$$
 24/6=4
-\]
+$$
 
 ---
 
@@ -1873,9 +1873,9 @@ Dense O2O 后仍应成立。
 
 定义教学指标：
 
-\[
+$$
 U=\frac{N_{\text{matched}}}{Q}
-\]
+$$
 
 ```python
 Q = 300
@@ -2245,13 +2245,13 @@ CopyBlend
 
 因为最重要的是先把原理固定下来：
 
-\[
+$$
 \boxed{
 \text{Increase }N
 \quad
 \text{while keeping }M_i=1
 }
-\]
+$$
 
 如果一开始同时塞入：
 
@@ -2529,9 +2529,9 @@ Matchability-Aware Loss
 
 并推导：
 
-\[
+$$
 \mathrm{MAL}(p,q,y)
-\]
+$$
 
 重点回答：
 

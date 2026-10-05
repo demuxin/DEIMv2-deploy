@@ -315,7 +315,7 @@ bbox IoU = 0.90
 
 因此 DETR matcher 会构造综合匹配代价：
 
-\[
+$$
 C_{ij}
 =
 \lambda_{\mathrm{cls}}C^{\mathrm{cls}}_{ij}
@@ -323,7 +323,7 @@ C_{ij}
 \lambda_{\mathrm{bbox}}C^{\mathrm{bbox}}_{ij}
 +
 \lambda_{\mathrm{giou}}C^{\mathrm{giou}}_{ij}
-\]
+$$
 
 其中：
 
@@ -363,7 +363,7 @@ C[i, j]
 
 例如：
 
-\[
+$$
 C=
 \begin{bmatrix}
 0.8 & 4.2 & 2.1\\
@@ -372,7 +372,7 @@ C=
 0.3 & 4.0 & 2.7\\
 2.9 & 1.7 & 0.2
 \end{bmatrix}
-\]
+$$
 
 可以读成：
 
@@ -396,9 +396,9 @@ query4 ↔ GT2
 
 总 cost：
 
-\[
+$$
 0.3+0.4+0.2=0.9
-\]
+$$
 
 Hungarian algorithm 做的就是：
 
@@ -412,14 +412,14 @@ Hungarian algorithm 做的就是：
 
 假设：
 
-\[
+$$
 C=
 \begin{bmatrix}
 0.1 & 0.2\\
 0.3 & 4.0\\
 4.0 & 0.4
 \end{bmatrix}
-\]
+$$
 
 如果分别对每一列找最小值：
 
@@ -454,9 +454,9 @@ GT1 → query2
 
 总代价：
 
-\[
+$$
 0.1+0.4=0.5
-\]
+$$
 
 所以 Hungarian algorithm 不是简单的：
 
@@ -472,13 +472,13 @@ cost.argmin(dim=0)
 
 数学形式可以写成：
 
-\[
+$$
 \sigma^*
 =
 \arg\min_{\sigma}
 \sum_{j=1}^{M}
 C_{\sigma(j),j}
-\]
+$$
 
 其中：
 
@@ -495,7 +495,7 @@ M = GT 数量
 
 现在开始逐项拆：
 
-\[
+$$
 C_{ij}
 =
 \lambda_{cls}C_{cls}
@@ -503,7 +503,7 @@ C_{ij}
 \lambda_{bbox}C_{bbox}
 +
 \lambda_{giou}C_{giou}
-\]
+$$
 
 先看 classification。
 
@@ -539,9 +539,9 @@ cost 大
 
 最简单的思想可以写成：
 
-\[
+$$
 C^{cls}_{ij}=-p_i(c_j)
-\]
+$$
 
 或者使用与 focal loss 思路相关的分类匹配代价。
 
@@ -582,19 +582,19 @@ matcher:
 
 GT：
 
-\[
+$$
 b^{gt}=[0.50,0.50,0.20,0.40]
-\]
+$$
 
 prediction：
 
-\[
+$$
 b^{pred}=[0.52,0.47,0.25,0.38]
-\]
+$$
 
 L1 distance：
 
-\[
+$$
 C_{bbox}
 =
 |0.52-0.50|
@@ -604,17 +604,17 @@ C_{bbox}
 |0.25-0.20|
 +
 |0.38-0.40|
-\]
+$$
 
 得到：
 
-\[
+$$
 C_{bbox}
 =
 0.02+0.03+0.05+0.02
 =
 0.12
-\]
+$$
 
 所以：
 
@@ -680,17 +680,17 @@ cost_bbox.shape
 
 ## 9.1 IoU
 
-\[
+$$
 IoU(A,B)
 =
 \frac{|A\cap B|}{|A\cup B|}
-\]
+$$
 
 范围：
 
-\[
+$$
 0\le IoU\le1
-\]
+$$
 
 如果：
 
@@ -728,21 +728,21 @@ IoU 都是 0。
 
 GIoU 加入最小包围区域 \(C\)：
 
-\[
+$$
 GIoU
 =
 IoU
 -
 \frac{|C\setminus(A\cup B)|}{|C|}
-\]
+$$
 
 因此 GIoU 可以在不相交时继续反映两个框之间的空间关系。
 
 范围：
 
-\[
+$$
 -1\le GIoU\le1
-\]
+$$
 
 matcher 希望：
 
@@ -758,9 +758,9 @@ cost 越小越好
 
 因此通常使用：
 
-\[
+$$
 C_{giou}=-GIoU
-\]
+$$
 
 ---
 
@@ -777,7 +777,7 @@ weight_dict:
 
 那么：
 
-\[
+$$
 C
 =
 2C_{cls}
@@ -785,7 +785,7 @@ C
 5C_{bbox}
 +
 2C_{giou}
-\]
+$$
 
 假设某个 prediction-GT pair：
 
@@ -797,19 +797,19 @@ giou cost           = -0.60
 
 那么：
 
-\[
+$$
 C
 =
 2(-0.70)+5(0.10)+2(-0.60)
-\]
+$$
 
-\[
+$$
 =-1.4+0.5-1.2
-\]
+$$
 
-\[
+$$
 =-2.1
-\]
+$$
 
 另一个 pair：
 
@@ -821,16 +821,16 @@ giou cost           = -0.20
 
 则：
 
-\[
+$$
 C
 =
 2(-0.30)+5(0.25)+2(-0.20)
-\]
+$$
 
-\[
+$$
 =-0.6+1.25-0.4
 =0.25
-\]
+$$
 
 Hungarian solver 更偏向：
 
@@ -912,13 +912,13 @@ out_bbox = pred_boxes.flatten(0, 1)
 
 为什么是 600？
 
-\[
+$$
 B\times N
 =
 2\times300
 =
 600
-\]
+$$
 
 ---
 
@@ -1321,9 +1321,9 @@ training dynamics
 
 检测结果本身就是：
 
-\[
+$$
 \{\hat y_1,\hat y_2,\ldots,\hat y_N\}
-\]
+$$
 
 而不是必须绑定固定排列顺序。
 
@@ -1357,17 +1357,17 @@ num_queries = 300
 
 positive ratio：
 
-\[
+$$
 \frac{5}{300}
 \approx1.67\%
-\]
+$$
 
 如果只有 2 个目标：
 
-\[
+$$
 \frac{2}{300}
 \approx0.67\%
-\]
+$$
 
 也就是说：
 
@@ -1420,24 +1420,24 @@ B = 16
 
 那么标准 O2O 一次 batch 大约有：
 
-\[
+$$
 16\times7=112
-\]
+$$
 
 个 matched positives。
 
 但 queries 总数：
 
-\[
+$$
 16\times300=4800
-\]
+$$
 
 positive proportion：
 
-\[
+$$
 \frac{112}{4800}
 \approx2.33\%
-\]
+$$
 
 现在你应该开始理解 DEIM 的问题意识了：
 
@@ -1844,9 +1844,9 @@ torch.Size([300, 7])
 
 也就是：
 
-\[
+$$
 300\times7=2100
-\]
+$$
 
 个 candidate pair。
 
@@ -2144,14 +2144,14 @@ box ≈ GT1
 
 构造出的 cost matrix 可能像：
 
-\[
+$$
 C=
 \begin{bmatrix}
 -2.4 & 3.1\\
 1.0 & 0.8\\
 3.4 & -2.7
 \end{bmatrix}
-\]
+$$
 
 Hungarian：
 
@@ -2353,9 +2353,9 @@ GIoU 改变
 
 所以 cost matrix 改变：
 
-\[
+$$
 C^{(t+1)}\neq C^{(t)}
-\]
+$$
 
 于是 Hungarian assignment 也可能变化。
 
@@ -2496,7 +2496,7 @@ training-stage matching improvements
 
 # 39. 本课必须记住的 10 个结论
 
-### 1
+1、
 
 DETR 输出的是一个 prediction set：
 
@@ -2507,7 +2507,7 @@ N queries
 
 ---
 
-### 2
+2、
 
 GT 也是一个 set：
 
@@ -2519,7 +2519,7 @@ M objects
 
 ---
 
-### 3
+3、
 
 训练前必须解决：
 
@@ -2531,13 +2531,13 @@ prediction ↔ GT
 
 ---
 
-### 4
+4、
 
 标准 DETR 使用 Hungarian matching 求全局 one-to-one assignment。
 
 ---
 
-### 5
+5、
 
 cost matrix：
 
@@ -2555,11 +2555,11 @@ C[i,j]
 
 ---
 
-### 6
+6、
 
 常见 matching cost 包含：
 
-\[
+$$
 C
 =
 \lambda_{cls}C_{cls}
@@ -2567,11 +2567,11 @@ C
 \lambda_{bbox}C_{bbox}
 +
 \lambda_{giou}C_{giou}
-\]
+$$
 
 ---
 
-### 7
+7、
 
 Hungarian matching 不是：
 
@@ -2583,13 +2583,13 @@ argmin()
 
 ---
 
-### 8
+8、
 
 Matching Cost 与最终 Training Loss 是两个不同概念。
 
 ---
 
-### 9
+9、
 
 如果：
 
@@ -2606,7 +2606,7 @@ Matching Cost 与最终 Training Loss 是两个不同概念。
 
 ---
 
-### 10
+10、
 
 这种 sparse positive supervision 正是理解 DEIM Dense O2O 的关键起点。
 
@@ -2614,7 +2614,7 @@ Matching Cost 与最终 Training Loss 是两个不同概念。
 
 # 40. 本课练习
 
-## 练习 1：shape
+练习 1：shape
 
 给定：
 
@@ -2641,7 +2641,7 @@ num_classes = 80
 
 ---
 
-## 练习 2：O2O
+练习 2：O2O
 
 一张图片：
 
@@ -2658,7 +2658,7 @@ positive/query ratio 是多少？
 
 ---
 
-## 练习 3：手算 cost
+练习 3：手算 cost
 
 给定：
 
@@ -2678,7 +2678,7 @@ cost_giou  = -0.5
 
 ---
 
-## 练习 4：解释
+练习 4：解释
 
 用自己的话解释：
 
@@ -2686,7 +2686,7 @@ cost_giou  = -0.5
 
 ---
 
-## 练习 5：概念辨析
+练习 5：概念辨析
 
 解释：
 
@@ -2704,7 +2704,7 @@ training loss
 
 ---
 
-## 练习 6：思考 DEIM
+练习 6：思考 DEIM
 
 如果我们希望增加 positive supervision，你能想到哪些方法？
 
@@ -2726,7 +2726,7 @@ training loss
 
 # 41. 练习答案
 
-## 练习 1
+练习 1
 
 ```text
 pred_logits:
@@ -2738,15 +2738,15 @@ pred_boxes:
 
 flatten predictions：
 
-\[
+$$
 4\times300=1200
-\]
+$$
 
 总 GT：
 
-\[
+$$
 3+8+5+2=18
-\]
+$$
 
 大 cost matrix：
 
@@ -2765,7 +2765,7 @@ image3: [300, 2]
 
 ---
 
-## 练习 2
+练习 2
 
 最多：
 
@@ -2775,31 +2775,31 @@ image3: [300, 2]
 
 比例：
 
-\[
+$$
 12/300=0.04=4\%
-\]
+$$
 
 ---
 
-## 练习 3
+练习 3
 
-\[
+$$
 C
 =
 2(-0.7)+5(0.12)+2(-0.5)
-\]
+$$
 
-\[
+$$
 =-1.4+0.6-1
-\]
+$$
 
-\[
+$$
 =-1.8
-\]
+$$
 
 ---
 
-## 练习 4
+练习 4
 
 因为不同 GT 独立 argmin 可能选择同一个 prediction。
 
@@ -2813,7 +2813,7 @@ prediction 不能重复使用
 
 ---
 
-## 练习 5
+练习 5
 
 ```text
 matching cost

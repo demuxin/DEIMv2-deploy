@@ -230,11 +230,15 @@ images:
 
 元素数量：
 
-\[ 2`\times3`{=tex}`\times640`{=tex}`\times640`{=tex} = 2,457,600 \]
+$$
+2\times3\times640\times640 = 2,457,600
+$$
 
 FP32 原始 tensor 约：
 
-\[ 2,457,600`\times4`{=tex} `\approx9.83`{=tex}`\text{ MB}`{=tex} \]
+$$
+2,457,600\times4 \approx9.83\text{ MB}
+$$
 
 FP16 约一半。
 
@@ -260,7 +264,9 @@ dinov3_vits16plus
 
 空间 patch grid：
 
-\[ 640/16=40 \]
+$$
+640/16=40
+$$
 
 所以：
 
@@ -272,7 +278,9 @@ dinov3_vits16plus
 
 patch 数：
 
-\[ 40`\times40`{=tex}=1600 \]
+$$
+40\times40=1600
+$$
 
 因此最重要的 ViT 空间 token 数：
 
@@ -292,7 +300,9 @@ Npatch = 1600
 
 因此：
 
-\[ 3`\times16`{=tex}`\times16`{=tex}=768 \]
+$$
+3\times16\times16=768
+$$
 
 个输入数值。
 
@@ -465,7 +475,9 @@ S5 [B,256,20,20]
 
 总计：
 
-\[ 6400+1600+400=8400 \]
+$$
+6400+1600+400=8400
+$$
 
 这个：
 
@@ -691,7 +703,9 @@ src_flatten = (
 
 因为：
 
-\[ 20`\times20`{=tex}=400 \]
+$$
+20\times20=400
+$$
 
 ------------------------------------------------------------------------
 
@@ -711,7 +725,9 @@ nhead：
 
 每 head dimension：
 
-\[ 256/8=32 \]
+$$
+256/8=32
+$$
 
 所以概念上：
 
@@ -1030,7 +1046,9 @@ feat_flatten = torch.concat(
 
 因为：
 
-\[ 6400+1600+400=8400 \]
+$$
+6400+1600+400=8400
+$$
 
 这个 tensor 后面通常可以称为：
 
@@ -1127,9 +1145,13 @@ grid_xy = (
 
 左上第一个 cell center：
 
-\[ c_x=`\frac{0.5}{40}`{=tex}=0.0125 \]
+$$
+c_x=\frac{0.5}{40}=0.0125
+$$
 
-\[ c_y=`\frac{0.5}{40}`{=tex}=0.0125 \]
+$$
+c_y=\frac{0.5}{40}=0.0125
+$$
 
 ------------------------------------------------------------------------
 
@@ -1177,7 +1199,9 @@ anchors = torch.log(
 
 即：
 
-\[ logit(p) = `\ln`{=tex}`\frac{p}{1-p}`{=tex} \]
+$$
+logit(p) = \ln\frac{p}{1-p}
+$$
 
 所以：
 
@@ -1596,7 +1620,9 @@ num_points=[3,6,3]
 
 所以每个 query / head：
 
-\[ 3+6+3=12 \]
+$$
+3+6+3=12
+$$
 
 个采样点。
 
@@ -1606,13 +1632,17 @@ num_points=[3,6,3]
 
 8 heads：
 
-\[ 300`\times8`{=tex}`\times12`{=tex} = 28,800 \]
+$$
+300\times8\times12 = 28,800
+$$
 
 个 query-head-sampling units。
 
 如果 dense query-memory：
 
-\[ 300`\times8400`{=tex} = 2,520,000 \]
+$$
+300\times8400 = 2,520,000
+$$
 
 pair。
 
@@ -1720,7 +1750,9 @@ pre_bboxes:
 
 4 条边：
 
-\[ 4`\times33`{=tex}=132 \]
+$$
+4\times33=132
+$$
 
 所以：
 
@@ -1942,13 +1974,21 @@ h  = 0.30
 
 转换为 xyxy：
 
-\[ x_1=c_x-w/2 \]
+$$
+x_1=c_x-w/2
+$$
 
-\[ y_1=c_y-h/2 \]
+$$
+y_1=c_y-h/2
+$$
 
-\[ x_2=c_x+w/2 \]
+$$
+x_2=c_x+w/2
+$$
 
-\[ y_2=c_y+h/2 \]
+$$
+y_2=c_y+h/2
+$$
 
 得到：
 
@@ -2072,7 +2112,9 @@ scores.flatten(1)
 
 因为：
 
-\[ 300`\times80`{=tex}=24000 \]
+$$
+300\times80=24000
+$$
 
 ------------------------------------------------------------------------
 
@@ -2415,17 +2457,23 @@ memory:
 
 B=1：
 
-\[ 8400`\times256`{=tex} = 2,150,400 \]
+$$
+8400\times256 = 2,150,400
+$$
 
 elements。
 
 FP32：
 
-\[ 2,150,400`\times4`{=tex} `\approx8.60`{=tex}`\text{ MB}`{=tex} \]
+$$
+2,150,400\times4 \approx8.60\text{ MB}
+$$
 
 FP16：
 
-\[ `\approx4.30`{=tex}`\text{ MB}`{=tex} \]
+$$
+\approx4.30\text{ MB}
+$$
 
 仅是 memory 本体，不包含 autograd、中间 attention、optimizer states。
 
@@ -2439,7 +2487,9 @@ FP16：
 
 B=1：
 
-\[ 300`\times256`{=tex}=76,800 \]
+$$
+300\times256=76,800
+$$
 
 elements。
 
@@ -2464,7 +2514,9 @@ queries 少
 
 如果每个 query 对 8400 memory 做 dense attention：
 
-\[ 300`\times8400`{=tex} = 2.52M \]
+$$
+300\times8400 = 2.52M
+$$
 
 query-memory pairs / head-like interaction scale。
 
@@ -2476,7 +2528,9 @@ query-memory pairs / head-like interaction scale。
 
 所以：
 
-\[ 300`\times12`{=tex}=3600 \]
+$$
+300\times12=3600
+$$
 
 sampling positions / head。
 
@@ -3481,7 +3535,9 @@ stride 32 → 25×25
 
 memory positions：
 
-\[ 10000+2500+625=13125 \]
+$$
+10000+2500+625=13125
+$$
 
 不再是 8400。
 
@@ -3524,9 +3580,13 @@ stride 32:
 
 memory：
 
-\[ 80`\times120`{=tex}+ 40`\times60`{=tex}+ 20`\times30`{=tex} \]
+$$
+80\times120+ 40\times60+ 20\times30
+$$
 
-\[ =9600+2400+600 =12600 \]
+$$
+=9600+2400+600 =12600
+$$
 
 所以所有 shape 推导都应从：
 
@@ -4516,39 +4576,57 @@ PostProcessor score space:
 
 Patch grid：
 
-\[ H_p=H/16,`\quad `{=tex}W_p=W/16 \]
+$$
+H_p=H/16,\quad W_p=W/16
+$$
 
 640：
 
-\[ 40`\times40`{=tex}=1600 \]
+$$
+40\times40=1600
+$$
 
 Multi-scale memory：
 
-\[ N= `\frac{H}{8}`{=tex}`\frac{W}{8}`{=tex} +
-`\frac{H}{16}`{=tex}`\frac{W}{16}`{=tex} +
-`\frac{H}{32}`{=tex}`\frac{W}{32}`{=tex} \]
+$$
+N= \frac{H}{8}\frac{W}{8} +
+\frac{H}{16}\frac{W}{16} +
+\frac{H}{32}\frac{W}{32}
+$$
 
 640：
 
-\[ N=6400+1600+400=8400 \]
+$$
+N=6400+1600+400=8400
+$$
 
 Head dimension：
 
-\[ d_h=256/8=32 \]
+$$
+d_h=256/8=32
+$$
 
 FDR dimension：
 
-\[ 4(reg\_{max}+1) = 4(32+1) = 132 \]
+$$
+4(reg_{max}+1) = 4(32+1) = 132
+$$
 
 Postprocess score count：
 
-\[ QK=300`\times80`{=tex}=24000 \]
+$$
+QK=300\times80=24000
+$$
 
 Normalized box → pixel：
 
-\[ x\_{pixel}=x\_{norm}W \]
+$$
+x_{pixel}=x_{norm}W
+$$
 
-\[ y\_{pixel}=y\_{norm}H \]
+$$
+y_{pixel}=y_{norm}H
+$$
 
 ------------------------------------------------------------------------
 

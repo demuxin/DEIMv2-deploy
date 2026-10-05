@@ -1,22 +1,22 @@
 # 第 4 课：Transformer 从零------Token、Q/K/V 与 Attention
 
-> **课程定位**：DEIMv2 从零到源码 · 第 4 / 24 课\
+> **课程定位**：DEIMv2 从零到源码 · 第 4 / 24 课
 > **本课目标**：从零理解 Token、Embedding、Q/K/V、Scaled Dot-Product
 > Attention、Multi-Head
 > Attention、Residual、LayerNorm、FFN，并能够独立推导 DEIMv2 中 ViT
-> Attention 的每一步 Tensor shape。\
+> Attention 的每一步 Tensor shape。
 > **重点连接**：DINOv3/ViT Backbone、DETR/DEIM Transformer
-> Decoder、Deformable Attention 的共同基础。\
+> Decoder、Deformable Attention 的共同基础。
 > **建议方式**：每看到一个矩阵乘法，先在纸上写 shape，再看公式；所有
 > PyTorch 实验尽量亲手运行。
 
-------------------------------------------------------------------------
+---
 
 # 0. 我们现在已经有了两块基础
 
 第 2 课学会：
 
-``` text
+```text
 [B,C,H,W]
 ↔
 [B,N,C]
@@ -24,7 +24,7 @@
 
 第 3 课学会：
 
-``` text
+```text
 Image
 → CNN
 → multi-scale feature maps
@@ -32,13 +32,13 @@ Image
 
 现在开始学习 DEIMv2 的另一块核心积木：
 
-``` text
+```text
 Transformer
 ```
 
 DEIMv2 中至少有两种非常重要的 Transformer 角色：
 
-``` text
+```text
 DINOv3 / ViT
 → 用 Transformer 理解图片
 
@@ -50,7 +50,7 @@ DEIM / D-FINE Decoder
 
 它也是后面：
 
-``` text
+```text
 DETR
 Deformable Attention
 DFINETransformer
@@ -59,13 +59,13 @@ DEIMTransformer
 
 的数学基础。
 
-------------------------------------------------------------------------
+---
 
 # 1. Transformer 到底解决什么问题？
 
 假设我们已经有一组 tokens：
 
-``` text
+```text
 Token 1
 Token 2
 Token 3
@@ -75,19 +75,19 @@ Token N
 
 每个 token 是一个向量：
 
-``` text
+```text
 C dimensions
 ```
 
 于是：
 
-``` text
+```text
 X = [N,C]
 ```
 
 加入 batch：
 
-``` text
+```text
 X = [B,N,C]
 ```
 
@@ -97,7 +97,7 @@ Transformer 最核心的问题是：
 
 Attention 就是用数据本身动态计算这种关系。
 
-------------------------------------------------------------------------
+---
 
 # 2. Token 是什么？
 
@@ -109,80 +109,84 @@ Token 不是 Transformer 专属的"神秘对象"。
 
 在 NLP：
 
-``` text
+```text
 一个词 / 子词
 → 一个 token
 ```
 
 在 ViT：
 
-``` text
+```text
 一个 image patch
 → 一个 token
 ```
 
 在 DETR：
 
-``` text
+```text
 一个 object query
 → 也可以看成一个 token-like representation
 ```
 
 在多尺度检测特征：
 
-``` text
+```text
 feature map 上一个空间位置
 → flatten 后成为一个 feature token
 ```
 
 所以：
 
-``` text
+```text
 Token
 =
 一个 C 维向量
 ```
 
-------------------------------------------------------------------------
+---
 
 # 3. 从图片变成 ViT Tokens
 
 假设：
 
-``` text
+```text
 Image:
 [B,3,640,640]
 ```
 
 patch size：
 
-``` text
+```text
 16×16
 ```
 
 那么每个方向：
 
-\[ 640/16=40 \]
+$$
+640/16=40
+$$
 
 patch 数：
 
-\[ 40`\times40`{=tex}=1600 \]
+$$
+40\times40=1600
+$$
 
 所以：
 
-``` text
+```text
 1600 image patches
 ```
 
 如果每个 patch 映射到：
 
-``` text
+```text
 C = 256
 ```
 
 维：
 
-``` text
+```text
 [B,1600,256]
 ```
 
@@ -190,13 +194,13 @@ C = 256
 
 第 2 课已经见过真实源码模式：
 
-``` python
+```python
 x = self.proj(x).flatten(2).transpose(1, 2)
 ```
 
 其 shape：
 
-``` text
+```text
 [B,3,640,640]
 →
 [B,256,40,40]
@@ -206,32 +210,32 @@ x = self.proj(x).flatten(2).transpose(1, 2)
 [B,1600,256]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 4. Embedding Dimension 是什么？
 
 假设：
 
-``` text
+```text
 [B,1600,256]
 ```
 
 其中：
 
-``` text
+```text
 1600 = token 数
 256  = 每个 token 的 feature dimension
 ```
 
 每个 token：
 
-``` text
+```text
 x_i ∈ R^256
 ```
 
 可以想象：
 
-``` text
+```text
 token 1:
 [0.12, -0.8, ..., 0.34]
 
@@ -245,13 +249,13 @@ token 2:
 
 它们是神经网络学习出的 feature representation。
 
-------------------------------------------------------------------------
+---
 
 # 5. 为什么需要 Attention？
 
 假设图片里：
 
-``` text
+```text
 一个人的头
 一个人的身体
 一辆车
@@ -266,7 +270,7 @@ token 2:
 
 Attention 的目标：
 
-``` text
+```text
 当前 token
    │
    ├── 应该关注 token 2 多少？
@@ -277,13 +281,13 @@ Attention 的目标：
 
 最后把相关 token 的信息加权汇总。
 
-------------------------------------------------------------------------
+---
 
 # 6. Query、Key、Value 的直觉
 
 Attention 为每个 token 生成三个向量：
 
-``` text
+```text
 Query
 Key
 Value
@@ -291,7 +295,7 @@ Value
 
 最常用的直觉：
 
-``` text
+```text
 Query:
 “我正在寻找什么？”
 
@@ -306,45 +310,63 @@ Value:
 
 真正数学定义是：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 也就是说：
 
 > Q、K、V 都是同一个输入 X 经过不同可学习线性投影得到的表示。
 
-------------------------------------------------------------------------
+---
 
 # 7. 从一个 Token 推导 Q/K/V
 
 假设一个 token：
 
-\[ x`\in`{=tex}`\mathbb{R}`{=tex}\^{256} \]
+$$
+x\in\mathbb{R}^{256}
+$$
 
 定义：
 
-\[ W_Q`\in`{=tex}`\mathbb{R}`{=tex}\^{256`\times256`{=tex}} \]
+$$
+W_Q\in\mathbb{R}^{256\times256}
+$$
 
 则：
 
-\[ q=xW_Q \]
+$$
+q=xW_Q
+$$
 
 得到：
 
-\[ q`\in`{=tex}`\mathbb{R}`{=tex}\^{256} \]
+$$
+q\in\mathbb{R}^{256}
+$$
 
 同理：
 
-\[ k=xW_K \]
+$$
+k=xW_K
+$$
 
-\[ v=xW_V \]
+$$
+v=xW_V
+$$
 
 所以：
 
-``` text
+```text
 x
 [256]
  │
@@ -353,20 +375,20 @@ x
  └── WV → v [256]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 8. 一批 Tokens 的 Q/K/V
 
 输入：
 
-``` text
+```text
 X:
 [B,N,C]
 ```
 
 假设：
 
-``` text
+```text
 B = 2
 N = 1600
 C = 256
@@ -374,14 +396,14 @@ C = 256
 
 则：
 
-``` text
+```text
 X:
 [2,1600,256]
 ```
 
 经过三个 Linear：
 
-``` text
+```text
 Q:
 [2,1600,256]
 
@@ -395,19 +417,19 @@ V:
 shape 不一定必须保持 256，但经典 self-attention 中通常总 hidden
 dimension 保持一致。
 
-------------------------------------------------------------------------
+---
 
 # 9. 为什么 Q 和 K 要做点积？
 
 假设：
 
-``` text
+```text
 q_i
 ```
 
 是 token i 的 Query，
 
-``` text
+```text
 k_j
 ```
 
@@ -415,17 +437,21 @@ k_j
 
 计算：
 
-\[ score\_{ij}=q_i`\cdot `{=tex}k_j \]
+$$
+score_{ij}=q_i\cdot k_j
+$$
 
 也就是：
 
-\[ score\_{ij} = `\sum`{=tex}*{d=1}\^{C} q*{i,d}k\_{j,d} \]
+$$
+score_{ij} = \sum_{d=1}^{C} q_{i,d}k_{j,d}
+$$
 
 得到一个标量。
 
 直觉：
 
-``` text
+```text
 score 高
 → token i 的 Query 与 token j 的 Key 更匹配
 
@@ -435,62 +461,60 @@ score 低
 
 这是模型学习出来的关系，不是人工规定的相似度规则。
 
-------------------------------------------------------------------------
+---
 
 # 10. 一个极小的 Attention 例子
 
 假设只有 3 个 tokens，每个 Q/K 是二维：
 
-\[ Q=
-```{=tex}
+$$
+Q=
 \begin{bmatrix}
 1&0\\
 0&1\\
 1&1
 \end{bmatrix}
-```
-\]
+$$
 
-\[ K=
-```{=tex}
+$$
+K=
 \begin{bmatrix}
 1&0\\
 0&1\\
 1&1
 \end{bmatrix}
-```
-\]
+$$
 
 计算：
 
-\[ QK\^T \]
+$$
+QK^T
+$$
 
 先：
 
-\[ K\^T=
-```{=tex}
+$$
+K^T=
 \begin{bmatrix}
 1&0&1\\
 0&1&1
 \end{bmatrix}
-```
-\]
+$$
 
 所以：
 
-\[ QK\^T =
-```{=tex}
+$$
+QK^T =
 \begin{bmatrix}
 1&0&1\\
 0&1&1\\
 1&1&2
 \end{bmatrix}
-```
-\]
+$$
 
 shape：
 
-``` text
+```text
 Q  = [3,2]
 Kᵀ = [2,3]
 
@@ -501,30 +525,32 @@ QKᵀ = [3,3]
 
 > 一个 Query 对所有 Keys 的匹配分数。
 
-------------------------------------------------------------------------
+---
 
 # 11. 为什么 Attention Matrix 是 N×N？
 
 一般：
 
-``` text
+```text
 Q = [N,d]
 K = [N,d]
 ```
 
 则：
 
-``` text
+```text
 Kᵀ = [d,N]
 ```
 
 矩阵乘法：
 
-\[ \[N,d\]`\times[d,N]`{=tex}= \[N,N\] \]
+$$
+[N,d] \times [d,N] = [N,N]
+$$
 
 所以 self-attention：
 
-``` text
+```text
 N 个 query tokens
 ×
 N 个 key tokens
@@ -532,7 +558,7 @@ N 个 key tokens
 
 产生：
 
-``` text
+```text
 N×N
 ```
 
@@ -540,45 +566,50 @@ N×N
 
 加 batch：
 
-``` text
+```text
 [B,N,N]
 ```
 
 加 multi-head：
 
-``` text
+```text
 [B,h,N,N]
 ```
 
-------------------------------------------------------------------------
+---
 
-# 12. 为什么除以 (`\sqrt{d_k}`{=tex})？
+# 12. 为什么除以 $\sqrt{d_k}$？
 
 标准 Scaled Dot-Product Attention：
 
-\[ Attention(Q,K,V) = softmax `\left`{=tex}(
-`\frac{QK^T}{\sqrt{d_k}}`{=tex} `\right`{=tex})V \]
+$$
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left( \frac{QK^T}{\sqrt{d}} \right)V
+$$
 
 为什么不是：
 
-\[ softmax(QK\^T)V \]
+$$
+softmax(QK^T)V
+$$
 
 ？
 
 假设 q/k 每个分量：
 
-``` text
+```text
 mean ≈ 0
 variance ≈ 1
 ```
 
 点积：
 
-\[ q`\cdot `{=tex}k = `\sum`{=tex}\_{i=1}\^{d_k}q_i k_i \]
+$$
+q\cdot k = \sum_{i=1}^{d_k}q_i k_i
+$$
 
 当：
 
-``` text
+```text
 d_k
 ```
 
@@ -586,7 +617,7 @@ d_k
 
 结果：
 
-``` text
+```text
 logits 绝对值容易变大
 → softmax 更容易饱和
 → 梯度可能变得很小
@@ -594,37 +625,43 @@ logits 绝对值容易变大
 
 除以：
 
-\[ `\sqrt{d_k}`{=tex} \]
+$$
+\sqrt{d_k}
+$$
 
 可以把尺度控制得更稳定。
 
-------------------------------------------------------------------------
+---
 
 # 13. Softmax 在 Attention 中做什么？
 
 假设某个 query 对 3 个 keys 的分数：
 
-``` text
+```text
 [2.0, 1.0, 0.0]
 ```
 
 softmax：
 
-\[ softmax(z_i) = `\frac{e^{z_i}}`{=tex} {`\sum`{=tex}\_j e\^{z_j}} \]
+$$
+softmax(z_i) = \frac{e^{z_i}} {\sum_j e^{z_j}}
+$$
 
 得到大约：
 
-``` text
+```text
 [0.665, 0.245, 0.090]
 ```
 
 满足：
 
-\[ 0.665+0.245+0.090=1 \]
+$$
+0.665+0.245+0.090=1
+$$
 
 所以可以理解为：
 
-``` text
+```text
 对 key 1：
 关注 66.5%
 
@@ -637,24 +674,28 @@ softmax：
 
 这些是对某个 query 的归一化 attention weights。
 
-------------------------------------------------------------------------
+---
 
 # 14. Attention Weight 为什么乘 V？
 
 假设：
 
-``` text
+```text
 attention weights:
 [0.665,0.245,0.090]
 ```
 
 对应 Value：
 
-\[ v_1,v_2,v_3 \]
+$$
+v_1,v_2,v_3
+$$
 
 输出：
 
-\[ y = 0.665v_1 + 0.245v_2 + 0.090v_3 \]
+$$
+y = 0.665v_1 + 0.245v_2 + 0.090v_3
+$$
 
 也就是说：
 
@@ -662,67 +703,73 @@ attention weights:
 
 这就是 Q/K/V 分工最重要的理解。
 
-------------------------------------------------------------------------
+---
 
 # 15. 完整单头 Attention
 
 输入：
 
-``` text
+```text
 X:
 [B,N,C]
 ```
 
 先：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 假设仍：
 
-``` text
+```text
 Q/K/V:
 [B,N,C]
 ```
 
 计算：
 
-``` text
+```text
 K.transpose(-2,-1):
 [B,C,N]
 ```
 
 所以：
 
-``` text
+```text
 Q @ Kᵀ:
 [B,N,N]
 ```
 
 scale：
 
-``` text
+```text
 [B,N,N]
 ```
 
 softmax：
 
-``` text
+```text
 [B,N,N]
 ```
 
 再：
 
-``` text
+```text
 AttentionWeights @ V
 ```
 
 即：
 
-``` text
+```text
 [B,N,N]
 @
 [B,N,C]
@@ -730,25 +777,27 @@ AttentionWeights @ V
 
 得到：
 
-``` text
+```text
 [B,N,C]
 ```
 
 因此：
 
-\[ `\boxed{
+$$
+\boxed{
 [B,N,C]
 \rightarrow
 Attention
 \rightarrow
 [B,N,C]
-}`{=tex} \]
+}
+$$
 
-------------------------------------------------------------------------
+---
 
 # 16. 第一个 PyTorch 实验：手写单头 Attention
 
-``` python
+```python
 import math
 import torch
 
@@ -789,7 +838,7 @@ print(
 
 预期：
 
-``` text
+```text
 scores:
 [2,4,4]
 
@@ -802,7 +851,7 @@ output:
 
 检查：
 
-``` python
+```python
 print(
     weights.sum(dim=-1)
 )
@@ -810,17 +859,17 @@ print(
 
 应该接近：
 
-``` text
+```text
 1
 ```
 
-------------------------------------------------------------------------
+---
 
 # 17. 为什么需要 Multi-Head Attention？
 
 如果只用一个 attention：
 
-``` text
+```text
 每个 token 只有一套 Q/K/V 关系空间
 ```
 
@@ -830,18 +879,20 @@ Multi-Head 的思想：
 
 例如：
 
-``` text
+```text
 C = 256
 num_heads = 8
 ```
 
 则：
 
-\[ d=256/8=32 \]
+$$
+d=256/8=32
+$$
 
 所以：
 
-``` text
+```text
 原：
 [B,N,256]
 
@@ -851,7 +902,7 @@ num_heads = 8
 
 8 个 head 各自做 attention。
 
-------------------------------------------------------------------------
+---
 
 # 18. Multi-Head 不是复制 8 份完整 256 维 Attention
 
@@ -859,7 +910,7 @@ num_heads = 8
 
 典型做法：
 
-``` text
+```text
 总 hidden dim = 256
 
 8 heads
@@ -869,29 +920,31 @@ num_heads = 8
 
 因为：
 
-\[ 8`\times32`{=tex}=256 \]
+$$
+8\times32=256
+$$
 
 所以只是把：
 
-``` text
+```text
 256-dimensional representation
 ```
 
 重新组织为：
 
-``` text
+```text
 8 × 32
 ```
 
 并让每个 head 独立计算 attention。
 
-------------------------------------------------------------------------
+---
 
 # 19. QKV 一次 Linear 为什么输出 3C？
 
 源码常见：
 
-``` python
+```python
 self.qkv = nn.Linear(
     C,
     C * 3
@@ -900,47 +953,49 @@ self.qkv = nn.Linear(
 
 输入：
 
-``` text
+```text
 [B,N,C]
 ```
 
 输出：
 
-``` text
+```text
 [B,N,3C]
 ```
 
 例如：
 
-``` text
+```text
 C=256
 ```
 
 则：
 
-``` text
+```text
 [B,N,768]
 ```
 
 然后 reshape：
 
-``` text
+```text
 [B,N,3,h,d]
 ```
 
 因为：
 
-\[ 3hd=3C \]
+$$
+3hd=3C
+$$
 
 这比写三个独立 Linear 在代码组织上更紧凑。
 
-------------------------------------------------------------------------
+---
 
 # 20. DEIMv2 风格 QKV Shape 完整推导
 
 假设：
 
-``` text
+```text
 B = 2
 N = 1600
 C = 256
@@ -950,32 +1005,32 @@ d = 32
 
 输入：
 
-``` text
+```text
 x:
 [2,1600,256]
 ```
 
 QKV Linear：
 
-``` text
+```text
 [2,1600,768]
 ```
 
 reshape：
 
-``` text
+```text
 [2,1600,3,8,32]
 ```
 
 permute：
 
-``` text
+```text
 [3,2,8,1600,32]
 ```
 
 unbind：
 
-``` text
+```text
 Q:
 [2,8,1600,32]
 
@@ -988,109 +1043,118 @@ V:
 
 这正是第 2 课已经学过的 shape 操作，现在终于知道为什么这样做。
 
-------------------------------------------------------------------------
+---
 
 # 21. 每个 Head 的 Attention Matrix
 
 Q：
 
-``` text
+```text
 [B,h,N,d]
 ```
 
 K：
 
-``` text
+```text
 [B,h,N,d]
 ```
 
 transpose K：
 
-``` text
+```text
 [B,h,d,N]
 ```
 
 所以：
 
-``` text
+```text
 Q @ Kᵀ
 ```
 
 得到：
 
-``` text
+```text
 [B,h,N,N]
 ```
 
 例如：
 
-``` text
+```text
 [2,8,1600,1600]
 ```
 
 这意味着：
 
-``` text
+```text
 2 batches
 8 heads
 每个 head
 1600 queries × 1600 keys
 ```
 
-------------------------------------------------------------------------
+---
 
 # 22. 1600×1600 到底有多大？
 
 每个 head：
 
-\[ 1600\^2 = 2,560,000 \]
+$$
+1600^2 = 2,560,000
+$$
 
 8 heads：
 
-\[ 20,480,000 \]
+$$
+20,480,000
+$$
 
 batch=2：
 
-\[ 40,960,000 \]
+$$
+40,960,000
+$$
 
 仅 attention score 就有约：
 
-``` text
+```text
 4096 万个元素
 ```
 
 如果 float32：
 
-``` text
+```text
 4 bytes / element
 ```
 
 仅这一矩阵理论原始存储规模约：
 
-\[ 40,960,000`\times4`{=tex} `\approx
-163.84`{=tex} MB \]
+$$
+40,960,000\times4 \approx 163.84\text{ MB}
+$$
 
 训练还需要中间 activation/gradient，因此实际内存压力更复杂。
 
 这就是为什么标准全局 attention 的：
 
-\[ O(N\^2) \]
+$$
+O(N^2)
+$$
 
 复杂度如此重要。
 
-------------------------------------------------------------------------
+---
 
 # 23. 这为什么与 Deformable Attention 有关？
 
 以后检测特征可能不是：
 
-``` text
+```text
 1600 tokens
 ```
 
 而是：
 
-``` text
+```text
 80×80 + 40×40 + 20×20
 =
 8400
@@ -1098,7 +1162,9 @@ batch=2：
 
 如果对 8400 tokens 做完整：
 
-\[ 8400\^2 = 70,560,000 \]
+$$
+8400^2 = 70,560,000
+$$
 
 每个 head 就超过 7000 万个 pairwise scores。
 
@@ -1109,85 +1175,91 @@ Deformable Attention 的核心动机之一就是：
 
 所以第 7 课学习 Deformable Attention 时，本课的：
 
-``` text
+```text
 N×N full attention
 ```
 
 就是最重要的对照基线。
 
-------------------------------------------------------------------------
+---
 
 # 24. Multi-Head Attention 的输出怎样合回来？
 
 每个 head 输出：
 
-``` text
+```text
 [B,h,N,d]
 ```
 
 例如：
 
-``` text
+```text
 [2,8,1600,32]
 ```
 
 先：
 
-``` python
+```python
 x = x.transpose(1, 2)
 ```
 
 得到：
 
-``` text
+```text
 [B,N,h,d]
 ```
 
 即：
 
-``` text
+```text
 [2,1600,8,32]
 ```
 
 再 reshape：
 
-``` python
+```python
 x = x.reshape(B, N, C)
 ```
 
 得到：
 
-``` text
+```text
 [2,1600,256]
 ```
 
 因为：
 
-\[ 8`\times32`{=tex}=256 \]
+$$
+8\times32=256
+$$
 
 最后通常还有：
 
-``` python
+```python
 self.proj(x)
 ```
 
 即 output projection。
 
-------------------------------------------------------------------------
+---
 
 # 25. 完整 Multi-Head Attention 公式
 
 可以写成：
 
-\[ head_i = Attention( QW_i\^Q, KW_i\^K, VW_i\^V ) \]
+$$
+head_i = Attention( QW_i^Q, KW_i^K, VW_i^V )
+$$
 
 然后：
 
-\[ MultiHead(Q,K,V) = Concat( head_1,`\ldots`{=tex},head_h )W\^O \]
+$$
+MultiHead(Q,K,V) = Concat( head_1,\ldots,head_h )W^O
+$$
 
 其中：
 
-``` text
+```text
 W_i^Q
 W_i^K
 W_i^V
@@ -1195,7 +1267,7 @@ W_i^V
 
 是每个 head 对应的投影子空间，
 
-``` text
+```text
 W^O
 ```
 
@@ -1203,11 +1275,11 @@ W^O
 
 实际实现常把所有 heads 的 Q/K/V projection 合并成大矩阵一次完成。
 
-------------------------------------------------------------------------
+---
 
 # 26. 第二个 PyTorch 实验：手写 Multi-Head Attention
 
-``` python
+```python
 import math
 import torch
 import torch.nn as nn
@@ -1288,7 +1360,7 @@ class TinyMultiHeadAttention(nn.Module):
 
 测试：
 
-``` python
+```python
 x = torch.randn(
     2, 300, 256
 )
@@ -1306,37 +1378,37 @@ print(y.shape)
 
 应该：
 
-``` text
+```text
 [2,300,256]
 [2,300,256]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 27. 为什么输入输出 Shape 一样很重要？
 
 Transformer block 常使用 residual connection：
 
-``` python
+```python
 x = x + attention(x)
 ```
 
 如果：
 
-``` text
+```text
 x:
 [B,N,C]
 ```
 
 那么：
 
-``` text
+```text
 attention(x)
 ```
 
 也必须：
 
-``` text
+```text
 [B,N,C]
 ```
 
@@ -1345,17 +1417,19 @@ attention(x)
 所以 Multi-Head Attention 最后要重新合并 heads，并通常投影回原 hidden
 dimension。
 
-------------------------------------------------------------------------
+---
 
 # 28. Residual Connection 是什么？
 
 最简单：
 
-\[ y=x+F(x) \]
+$$
+y=x+F(x)
+$$
 
 其中：
 
-``` text
+```text
 F(x)
 ```
 
@@ -1363,7 +1437,7 @@ F(x)
 
 例如：
 
-``` python
+```python
 x = x + self.attn(x)
 ```
 
@@ -1373,50 +1447,50 @@ x = x + self.attn(x)
 
 这有助于深层网络的信息和梯度传播。
 
-------------------------------------------------------------------------
+---
 
 # 29. Residual 的 Shape 条件
 
 如果：
 
-``` text
+```text
 x:
 [B,N,256]
 ```
 
 那么：
 
-``` text
+```text
 F(x)
 ```
 
 也必须是：
 
-``` text
+```text
 [B,N,256]
 ```
 
 才能：
 
-``` python
+```python
 x + F(x)
 ```
 
 这就是为什么很多 Transformer 子层最终都保持 hidden dimension。
 
-------------------------------------------------------------------------
+---
 
 # 30. LayerNorm 是什么？
 
 Transformer 中常见：
 
-``` python
+```python
 nn.LayerNorm(C)
 ```
 
 假设：
 
-``` text
+```text
 x:
 [B,N,C]
 ```
@@ -1425,52 +1499,62 @@ LayerNorm 通常沿最后一个 feature dimension 归一化。
 
 对一个 token：
 
-\[ x_i`\in`{=tex}`\mathbb{R}`{=tex}\^{C} \]
+$$
+x_i\in\mathbb{R}^{C}
+$$
 
 计算：
 
-\[ `\mu`{=tex} = `\frac{1}{C}`{=tex} `\sum`{=tex}\_{j=1}\^{C}x_j \]
+$$
+\mu = \frac{1}{C} \sum_{j=1}^{C}x_j
+$$
 
-\[ `\sigma`{=tex}\^2 = `\frac{1}{C}`{=tex} `\sum`{=tex}\_{j=1}\^{C}
-(x_j-`\mu`{=tex})\^2 \]
+$$
+\sigma^2 = \frac{1}{C} \sum_{j=1}^{C}
+(x_j-\mu)^2
+$$
 
 归一化：
 
-\[ `\hat{x}`{=tex}\_j = `\frac{x_j-\mu}`{=tex}
-{`\sqrt{\sigma^2+\epsilon}`{=tex}} \]
+$$
+\hat{x}_j = \frac{x_j-\mu}
+{\sqrt{\sigma^2+\epsilon}}
+$$
 
 再学习：
 
-\[ y_j = `\gamma`{=tex}\_j`\hat{x}`{=tex}\_j+`\beta`{=tex}\_j \]
+$$
+y_j = \gamma_j\hat{x}_j+\beta_j
+$$
 
 其中：
 
-``` text
+```text
 γ
 β
 ```
 
 是可学习参数。
 
-------------------------------------------------------------------------
+---
 
 # 31. LayerNorm 与 BatchNorm 的直觉区别
 
 CNN 中常见：
 
-``` text
+```text
 BatchNorm
 ```
 
 Transformer 中常见：
 
-``` text
+```text
 LayerNorm
 ```
 
 非常粗略地理解：
 
-``` text
+```text
 BatchNorm
 → 统计方式与 batch/channel/spatial 结构有关
 
@@ -1480,13 +1564,13 @@ LayerNorm
 
 对于：
 
-``` text
+```text
 [B,N,C]
 ```
 
 LayerNorm(C) 不需要依赖其他 batch 样本才能定义每个 token 的归一化。
 
-------------------------------------------------------------------------
+---
 
 # 32. Pre-Norm 与 Post-Norm
 
@@ -1494,7 +1578,7 @@ Transformer 有两种常见组织。
 
 Post-Norm：
 
-``` text
+```text
 x
 │
 ├─────── residual ──────┐
@@ -1510,11 +1594,13 @@ Attention               │
 
 形式：
 
-\[ x'=LN(x+Attn(x)) \]
+$$
+x'=LN(x+Attn(x))
+$$
 
 Pre-Norm：
 
-``` text
+```text
 x
 │
 ├───────────────────────┐
@@ -1528,7 +1614,9 @@ Attention               │
 
 形式：
 
-\[ x'=x+Attn(LN(x)) \]
+$$
+x'=x+Attn(LN(x))
+$$
 
 不同实现可能不同。
 
@@ -1538,11 +1626,11 @@ Attention               │
 
 必须看：
 
-``` text
+```text
 Norm 在 Attention 前还是后？
 ```
 
-------------------------------------------------------------------------
+---
 
 # 33. FFN 是什么？
 
@@ -1556,18 +1644,20 @@ FFN 负责：
 
 典型：
 
-\[ FFN(x) = W_2`\sigma`{=tex}(W_1x+b_1)+b_2 \]
+$$
+FFN(x) = W_2\sigma(W_1x+b_1)+b_2
+$$
 
 例如：
 
-``` text
+```text
 hidden dim = 256
 FFN dim = 1024
 ```
 
 shape：
 
-``` text
+```text
 [B,N,256]
 ↓ Linear
 [B,N,1024]
@@ -1579,19 +1669,19 @@ shape：
 
 所以输出仍：
 
-``` text
+```text
 [B,N,256]
 ```
 
 可以 residual。
 
-------------------------------------------------------------------------
+---
 
 # 34. Attention 与 FFN 的分工
 
 非常重要：
 
-``` text
+```text
 Attention
 → token mixing
 
@@ -1601,25 +1691,25 @@ FFN
 
 Attention：
 
-``` text
+```text
 token 1 可以读取 token 2/3/4 的信息
 ```
 
 FFN：
 
-``` text
+```text
 对每一个 token 的 C 维 feature 独立做相同 MLP
 ```
 
 这两个模块组合形成 Transformer Block 的核心。
 
-------------------------------------------------------------------------
+---
 
 # 35. 一个标准 Transformer Block
 
 简化 Pre-Norm：
 
-``` python
+```python
 def forward(x):
 
     x = x + attn(
@@ -1635,7 +1725,7 @@ def forward(x):
 
 shape：
 
-``` text
+```text
 x
 [B,N,C]
 
@@ -1662,11 +1752,11 @@ x
 
 但 feature 内容已经发生复杂变化。
 
-------------------------------------------------------------------------
+---
 
 # 36. 第三个 PyTorch 实验：手写 Transformer Block
 
-``` python
+```python
 import torch
 import torch.nn as nn
 
@@ -1720,7 +1810,7 @@ class TinyTransformerBlock(nn.Module):
 
 测试：
 
-``` python
+```python
 x = torch.randn(
     2, 300, 256
 )
@@ -1735,17 +1825,17 @@ print(y.shape)
 
 都是：
 
-``` text
+```text
 [2,300,256]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 37. Self-Attention 是什么？
 
 如果：
 
-``` text
+```text
 Q
 K
 V
@@ -1753,41 +1843,47 @@ V
 
 都来自同一个 sequence：
 
-``` text
+```text
 X
 ```
 
 则称：
 
-``` text
+```text
 Self-Attention
 ```
 
 即：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 一个 token 可以从同一序列其他 token 获取信息。
 
 ViT 中典型就是 self-attention。
 
-------------------------------------------------------------------------
+---
 
 # 38. Cross-Attention 是什么？
 
 如果：
 
-``` text
+```text
 Q
 ```
 
 来自一个序列，
 
-``` text
+```text
 K/V
 ```
 
@@ -1797,7 +1893,7 @@ K/V
 
 例如 DETR Decoder：
 
-``` text
+```text
 Object Queries
 → Q
 
@@ -1807,7 +1903,7 @@ Image Features
 
 于是：
 
-``` text
+```text
 Query:
 “我这个 object query 想在图里找什么？”
 
@@ -1820,13 +1916,13 @@ Image Value:
 
 这是理解 DETR 的关键。
 
-------------------------------------------------------------------------
+---
 
 # 39. Self-Attention vs Cross-Attention Shape
 
 Self-Attention：
 
-``` text
+```text
 X:
 [B,N,C]
 
@@ -1839,7 +1935,7 @@ Attention:
 
 Cross-Attention：
 
-``` text
+```text
 Query sequence:
 [B,Nq,C]
 
@@ -1849,7 +1945,7 @@ Image sequence:
 
 则：
 
-``` text
+```text
 Q:
 [B,h,Nq,d]
 
@@ -1862,7 +1958,7 @@ V:
 
 Attention matrix：
 
-``` text
+```text
 [B,h,Nq,Nk]
 ```
 
@@ -1870,13 +1966,13 @@ Attention matrix：
 
 > Cross-attention 不要求 query token 数和 key token 数相同。
 
-------------------------------------------------------------------------
+---
 
 # 40. DETR 风格例子
 
 假设：
 
-``` text
+```text
 object queries:
 Nq = 300
 
@@ -1889,7 +1985,7 @@ head_dim = 32
 
 则：
 
-``` text
+```text
 Q:
 [B,8,300,32]
 
@@ -1902,7 +1998,7 @@ V:
 
 QKᵀ：
 
-``` text
+```text
 [B,8,300,8400]
 ```
 
@@ -1912,13 +2008,13 @@ QKᵀ：
 
 后面 Deformable Attention 会大幅减少实际采样位置。
 
-------------------------------------------------------------------------
+---
 
 # 41. 为什么 DETR Decoder 还需要 Query Self-Attention？
 
 Decoder 中常见：
 
-``` text
+```text
 ① query self-attention
 ② query-image cross-attention
 ③ FFN
@@ -1926,7 +2022,7 @@ Decoder 中常见：
 
 Self-attention：
 
-``` text
+```text
 300 queries
 ↔
 300 queries
@@ -1936,7 +2032,7 @@ Self-attention：
 
 Cross-attention：
 
-``` text
+```text
 300 queries
 ↔
 image features
@@ -1946,13 +2042,13 @@ image features
 
 所以两种 attention 的角色不同。
 
-------------------------------------------------------------------------
+---
 
 # 42. Position 信息为什么重要？
 
 Attention 本身如果只看 token feature，没有额外位置机制，它并不知道：
 
-``` text
+```text
 token 17 在图片左上角
 
 token 900 在图片右下角
@@ -1962,7 +2058,7 @@ token 900 在图片右下角
 
 所以 Transformer 需要位置相关信息，例如：
 
-``` text
+```text
 absolute position embedding
 relative position
 sin/cos encoding
@@ -1977,31 +2073,31 @@ DINOv3/DEIMv2 中会遇到位置编码与 RoPE 相关实现。
 > **Attention 负责内容关系，位置机制负责告诉模型 token
 > 在哪里/彼此空间关系如何。**
 
-------------------------------------------------------------------------
+---
 
 # 43. CLS Token 是什么？
 
 ViT 中常见一个额外 token：
 
-``` text
+```text
 [CLS]
 ```
 
 如果 patch tokens：
 
-``` text
+```text
 1600
 ```
 
 加入 CLS：
 
-``` text
+```text
 1601 tokens
 ```
 
 shape：
 
-``` text
+```text
 [B,1601,C]
 ```
 
@@ -2011,37 +2107,37 @@ CLS token 不对应一个具体 patch。
 
 源码里可能看到：
 
-``` python
+```python
 x[:, 0]
 ```
 
 代表：
 
-``` text
+```text
 CLS token
 ```
 
 而：
 
-``` python
+```python
 x[:, 1:]
 ```
 
 代表：
 
-``` text
+```text
 patch tokens
 ```
 
 第 2 课已经见过这种 indexing。
 
-------------------------------------------------------------------------
+---
 
 # 44. Dropout / DropPath 是什么角色？
 
 Transformer 中常见：
 
-``` text
+```text
 Dropout
 DropPath / Stochastic Depth
 ```
@@ -2050,19 +2146,19 @@ DropPath / Stochastic Depth
 
 Dropout：
 
-``` text
+```text
 随机把部分 activation 置零
 ```
 
 DropPath：
 
-``` text
+```text
 训练时随机跳过某些 residual branch
 ```
 
 例如：
 
-``` text
+```text
 x = x + drop_path(attn(...))
 ```
 
@@ -2070,7 +2166,7 @@ x = x + drop_path(attn(...))
 
 后面读 DINOv3 block 时会再次遇到。
 
-------------------------------------------------------------------------
+---
 
 # 45. Attention Mask 是什么？
 
@@ -2080,7 +2176,7 @@ x = x + drop_path(attn(...))
 
 例如：
 
-``` text
+```text
 允许：
 score
 
@@ -2090,7 +2186,9 @@ score
 
 softmax 后：
 
-\[ e\^{-`\infty`{=tex}}=0 \]
+$$
+e^{-\infty}=0
+$$
 
 所以被 mask 的位置权重为 0。
 
@@ -2098,19 +2196,19 @@ softmax 后：
 
 检测 Decoder 中还会遇到 denoising queries 与 attention mask 的设计。
 
-------------------------------------------------------------------------
+---
 
 # 46. `scaled_dot_product_attention` 是什么？
 
 现代 PyTorch 提供：
 
-``` python
+```python
 torch.nn.functional.scaled_dot_product_attention
 ```
 
 可以直接完成：
 
-``` text
+```text
 QKᵀ
 scale
 mask
@@ -2123,7 +2221,7 @@ dropout
 
 因此真实源码未必显式写：
 
-``` python
+```python
 scores = q @ k.transpose(...)
 scores /= sqrt(d)
 scores = softmax(scores)
@@ -2132,13 +2230,13 @@ out = scores @ v
 
 但数学本质仍然是 Scaled Dot-Product Attention。
 
-------------------------------------------------------------------------
+---
 
 # 47. Flash Attention 为什么会出现？
 
 标准 attention 如果显式存：
 
-``` text
+```text
 [B,h,N,N]
 ```
 
@@ -2147,7 +2245,7 @@ out = scores @ v
 Flash Attention 类方法通过更聪明的分块和内存访问方式，避免把完整中间
 attention matrix 以朴素方式写入显存，从而：
 
-``` text
+```text
 减少显存访问
 提高速度
 ```
@@ -2159,19 +2257,19 @@ attention matrix 以朴素方式写入显存，从而：
 所以先学懂本课公式，再看 Flash Attention 才不会把"高效实现"与"Attention
 定义"混淆。
 
-------------------------------------------------------------------------
+---
 
-# 48. 为什么 Self-Attention 是 (O(N\^2))？
+# 48. 为什么 Self-Attention 是 (O(N^2))？
 
 因为：
 
-``` text
+```text
 N queries
 ```
 
 都要与：
 
-``` text
+```text
 N keys
 ```
 
@@ -2179,25 +2277,27 @@ N keys
 
 pair 数：
 
-\[ N`\times `{=tex}N=N\^2 \]
+$$
+N\times N=N^2
+$$
 
 所以：
 
-``` text
+```text
 N 翻倍
 → pair 数约变 4 倍
 ```
 
 这和第 3 课中：
 
-``` text
+```text
 图像边长减半
 → 空间 token 数约变 1/4
 ```
 
 可以连接起来。
 
-------------------------------------------------------------------------
+---
 
 # 49. 图像分辨率与 Attention 复杂度的危险关系
 
@@ -2205,56 +2305,61 @@ patch size 固定为 16。
 
 图片：
 
-``` text
+```text
 640×640
 ```
 
 patch tokens：
 
-\[ 40\^2=1600 \]
+$$
+40^2=1600
+$$
 
 如果图片边长翻倍：
 
-``` text
+```text
 1280×1280
 ```
 
 tokens：
 
-\[ 80\^2=6400 \]
+$$
+80^2=6400
+$$
 
 token 数：
 
-``` text
+```text
 4×
 ```
 
 full attention pair 数：
 
-\[ 1600\^2 `\rightarrow
-6400`{=tex}\^2 \]
+$$
+1600^2 \rightarrow 6400^2
+$$
 
 变成：
 
-``` text
+```text
 16×
 ```
 
 所以高分辨率视觉 Transformer 的 attention 成本非常敏感。
 
-------------------------------------------------------------------------
+---
 
 # 50. 参数量：QKV Linear 有多少参数？
 
 假设：
 
-``` text
+```text
 C = 256
 ```
 
 QKV：
 
-``` python
+```python
 nn.Linear(
     256,
     768
@@ -2263,11 +2368,13 @@ nn.Linear(
 
 不算 bias：
 
-\[ 256`\times768`{=tex} = 196,608 \]
+$$
+256\times768 = 196,608
+$$
 
 output projection：
 
-``` python
+```python
 nn.Linear(
     256,
     256
@@ -2276,11 +2383,15 @@ nn.Linear(
 
 参数：
 
-\[ 256\^2 = 65,536 \]
+$$
+256^2 = 65,536
+$$
 
 所以 attention projection 总参数约：
 
-\[ 262,144 \]
+$$
+262,144
+$$
 
 不含 bias。
 
@@ -2289,28 +2400,34 @@ nn.Linear(
 > Attention 计算量随 token 数 N 强烈变化，但这些 Linear 的参数量主要由
 > hidden dimension C 决定。
 
-------------------------------------------------------------------------
+---
 
 # 51. FFN 往往也很占参数
 
 假设：
 
-``` text
+```text
 C = 256
 FFN hidden = 1024
 ```
 
 第一层：
 
-\[ 256`\times1024`{=tex} = 262,144 \]
+$$
+256\times1024 = 262,144
+$$
 
 第二层：
 
-\[ 1024`\times256`{=tex} = 262,144 \]
+$$
+1024\times256 = 262,144
+$$
 
 合计：
 
-\[ 524,288 \]
+$$
+524,288
+$$
 
 不含 bias。
 
@@ -2318,13 +2435,13 @@ FFN hidden = 1024
 
 > FFN 参数量往往并不少，甚至比 attention projection 更多。
 
-------------------------------------------------------------------------
+---
 
 # 52. 一个 Transformer Block 的信息流
 
 把所有东西放在一起：
 
-``` text
+```text
 Input tokens
 [B,N,C]
     │
@@ -2362,13 +2479,13 @@ Output tokens
 
 一个 block 不改变 token 数和 hidden dimension，但让 feature 更强。
 
-------------------------------------------------------------------------
+---
 
 # 53. 多层 Transformer 会发生什么？
 
 假设 12 个 blocks：
 
-``` text
+```text
 Block 1
 ↓
 Block 2
@@ -2380,7 +2497,7 @@ Block 12
 
 每层：
 
-``` text
+```text
 [B,N,C]
 →
 [B,N,C]
@@ -2398,7 +2515,7 @@ CNN 中很多 stage 会改变 shape。
 
 Transformer block 常常主要改变 feature 内容，而保持 shape。
 
-------------------------------------------------------------------------
+---
 
 # 54. DINOv3 为什么会取多个 Block 的中间特征？
 
@@ -2407,7 +2524,7 @@ DEIMv2 的 DINOv3+STA 路线会关注多个 Transformer block
 
 直觉上：
 
-``` text
+```text
 较早 block
 → 相对低层的视觉表示
 
@@ -2419,33 +2536,33 @@ STA 再把这些信息适配到检测所需的空间多尺度结构。
 
 后面第 19、20 课会详细展开。
 
-------------------------------------------------------------------------
+---
 
 # 55. Self-Attention 与 CNN 卷积对比
 
 CNN 3×3：
 
-``` text
+```text
 一个位置
 主要直接读取局部 3×3 邻域
 ```
 
 Global Self-Attention：
 
-``` text
+```text
 一个 token
 理论上可以直接与所有 tokens 建立关系
 ```
 
 CNN：
 
-``` text
+```text
 local inductive bias 强
 ```
 
 Transformer：
 
-``` text
+```text
 global interaction 灵活
 ```
 
@@ -2453,7 +2570,7 @@ global interaction 灵活
 
 DEIMv2 的 DINOv3 + STA 就可以从这个角度理解一部分设计动机。
 
-------------------------------------------------------------------------
+---
 
 # 56. Attention Weight 是不是"模型解释"？
 
@@ -2461,14 +2578,14 @@ DEIMv2 的 DINOv3 + STA 就可以从这个角度理解一部分设计动机。
 
 Attention weights 确实表示：
 
-``` text
+```text
 在该 attention 运算中
 不同 key/value 位置参与输出的权重
 ```
 
 但不能简单断言：
 
-``` text
+```text
 attention weight 高
 =
 模型最终做出预测的唯一原因
@@ -2476,7 +2593,7 @@ attention weight 高
 
 深层模型还有：
 
-``` text
+```text
 多层 attention
 FFN
 residual
@@ -2488,70 +2605,96 @@ loss training
 
 所以 attention map 可以帮助观察内部行为，但不能自动等价为完整因果解释。
 
-------------------------------------------------------------------------
+---
 
 # 57. Self-Attention 的矩阵版本完整推导
 
 设：
 
-\[ X`\in`{=tex}`\mathbb{R}`{=tex}\^{N`\times `{=tex}C} \]
+$$
+X\in\mathbb{R}^{N\times C}
+$$
 
 投影：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 其中：
 
-\[ Q,K`\in`{=tex}`\mathbb{R}`{=tex}\^{N`\times `{=tex}d_k} \]
+$$
+Q,K\in\mathbb{R}^{N\times d_k}
+$$
 
-\[ V`\in`{=tex}`\mathbb{R}`{=tex}\^{N`\times `{=tex}d_v} \]
+$$
+V\in\mathbb{R}^{N\times d_v}
+$$
 
 分数：
 
-\[ S=QK\^T \]
+$$
+S=QK^T
+$$
 
 所以：
 
-\[ S`\in`{=tex}`\mathbb{R}`{=tex}\^{N`\times `{=tex}N} \]
+$$
+S\in\mathbb{R}^{N\times N}
+$$
 
 缩放：
 
-\[ `\hat `{=tex}S = `\frac{S}{\sqrt{d_k}}`{=tex} \]
+$$
+\hat S = \frac{S}{\sqrt{d_k}}
+$$
 
 softmax：
 
-\[ A = softmax(`\hat `{=tex}S) \]
+$$
+A = softmax(\hat S)
+$$
 
 所以：
 
-\[ A`\in`{=tex}`\mathbb{R}`{=tex}\^{N`\times `{=tex}N} \]
+$$
+A\in\mathbb{R}^{N\times N}
+$$
 
 输出：
 
-\[ O=AV \]
+$$
+O=AV
+$$
 
 于是：
 
-\[ \[N,N\]`\times[N,d_v]`{=tex}= \[N,d_v\] \]
+$$
+[N,N] \times [N,d_v] = [N,d_v]
+$$
 
-------------------------------------------------------------------------
+---
 
 # 58. 为什么 Softmax 通常沿最后一维？
 
 假设：
 
-``` text
+```text
 scores:
 [B,h,Nq,Nk]
 ```
 
 对每个：
 
-``` text
+```text
 batch
 head
 query
@@ -2559,7 +2702,7 @@ query
 
 我们需要在：
 
-``` text
+```text
 所有 keys
 ```
 
@@ -2567,7 +2710,7 @@ query
 
 所以：
 
-``` python
+```python
 softmax(
     scores,
     dim=-1
@@ -2576,23 +2719,23 @@ softmax(
 
 最后一维正是：
 
-``` text
+```text
 Nk
 ```
 
 结果：
 
-``` python
+```python
 attn.sum(dim=-1)
 ```
 
 应该接近 1。
 
-------------------------------------------------------------------------
+---
 
 # 59. 第四个实验：观察 Attention Weight
 
-``` python
+```python
 import torch
 import math
 
@@ -2641,7 +2784,7 @@ print(out)
 
 尝试在运行前回答：
 
-``` text
+```text
 query [1,0]
 ```
 
@@ -2649,19 +2792,19 @@ query [1,0]
 
 然后观察最终 Value 的加权组合。
 
-------------------------------------------------------------------------
+---
 
 # 60. 第五个实验：Attention 不只是"相似度平均"
 
 改变：
 
-``` text
+```text
 V
 ```
 
 但保持：
 
-``` text
+```text
 Q
 K
 ```
@@ -2670,19 +2813,19 @@ K
 
 你会发现：
 
-``` text
+```text
 attention weights 不变
 ```
 
 但：
 
-``` text
+```text
 output 改变
 ```
 
 这能非常清楚地理解：
 
-``` text
+```text
 Q/K
 → 决定读取位置/权重
 
@@ -2690,11 +2833,11 @@ V
 → 决定读取的内容
 ```
 
-------------------------------------------------------------------------
+---
 
 # 61. 第六个实验：自己检查 Head Merge
 
-``` python
+```python
 import torch
 
 B = 2
@@ -2732,7 +2875,7 @@ print(
 
 输出：
 
-``` text
+```text
 [2,8,300,32]
 →
 [2,300,8,32]
@@ -2740,11 +2883,11 @@ print(
 [2,300,256]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 62. 第七个实验：Self-Attention 与 Cross-Attention
 
-``` python
+```python
 import torch
 
 B = 2
@@ -2775,18 +2918,18 @@ print(scores.shape)
 
 预期：
 
-``` text
+```text
 [2,8,300,8400]
 ```
 
 不要真的在低显存设备上随意扩大
 B/N/head，因为这个矩阵会快速占用大量内存。
 
-------------------------------------------------------------------------
+---
 
 # 63. 第八个实验：一个完整 Tiny Transformer Encoder
 
-``` python
+```python
 import torch
 import torch.nn as nn
 
@@ -2834,19 +2977,19 @@ y = model(x)
 
 你会看到每一层：
 
-``` text
+```text
 [2,300,256]
 ```
 
 shape 都不变。
 
-------------------------------------------------------------------------
+---
 
 # 64. 从 ViT 到 DETR：Attention 的角色发生变化
 
 ViT Backbone：
 
-``` text
+```text
 patch tokens
 ↓
 self-attention
@@ -2856,13 +2999,13 @@ patch tokens
 
 主要是：
 
-``` text
+```text
 image ↔ image
 ```
 
 DETR Decoder：
 
-``` text
+```text
 object queries
 ↓
 self-attention
@@ -2878,20 +3021,20 @@ queries
 
 主要是：
 
-``` text
+```text
 query ↔ query
 query ↔ image
 ```
 
 所以同一个 Attention 数学模块，在不同位置承担不同功能。
 
-------------------------------------------------------------------------
+---
 
 # 65. DEIMv2 中你以后会看到的 Attention 家族
 
 本课程后面会逐步遇到：
 
-``` text
+```text
 ViT Self-Attention
 
 Multi-Head Attention
@@ -2911,13 +3054,13 @@ Decoder localization-related interactions
 
 > Query 如何从 Key/Value 中选择并聚合信息？
 
-------------------------------------------------------------------------
+---
 
 # 66. 真实源码阅读时的 8 个问题
 
 以后看到任何 Attention 实现，固定问：
 
-``` text
+```text
 1. Q 从哪里来？
 2. K 从哪里来？
 3. V 从哪里来？
@@ -2930,7 +3073,7 @@ Decoder localization-related interactions
 
 只要能回答这 8 个问题，大多数 Attention 代码就不会完全陌生。
 
-------------------------------------------------------------------------
+---
 
 # 67. 常见误区 1：Q/K/V 是三份不同输入
 
@@ -2938,13 +3081,13 @@ Decoder localization-related interactions
 
 Self-Attention：
 
-``` text
+```text
 Q/K/V
 ```
 
 都来自：
 
-``` text
+```text
 同一个 X
 ```
 
@@ -2952,7 +3095,7 @@ Q/K/V
 
 Cross-Attention 才通常是：
 
-``` text
+```text
 Q
 来自 query sequence
 
@@ -2960,7 +3103,7 @@ K/V
 来自 source/image sequence
 ```
 
-------------------------------------------------------------------------
+---
 
 # 68. 常见误区 2：Attention 就是找最相似的一个 Token
 
@@ -2968,7 +3111,7 @@ K/V
 
 Softmax 通常给所有允许位置一个权重分布：
 
-``` text
+```text
 0.6
 0.2
 0.1
@@ -2980,7 +3123,7 @@ Softmax 通常给所有允许位置一个权重分布：
 
 并不一定只选一个位置。
 
-------------------------------------------------------------------------
+---
 
 # 69. 常见误区 3：Multi-Head 就是把模型复制多份
 
@@ -2988,7 +3131,7 @@ Softmax 通常给所有允许位置一个权重分布：
 
 它把 feature dimension 划分为多个 attention 子空间，并行学习不同关系。
 
-------------------------------------------------------------------------
+---
 
 # 70. 常见误区 4：Transformer 没有空间信息
 
@@ -3000,13 +3143,13 @@ Softmax 通常给所有允许位置一个权重分布：
 
 不能简单说：
 
-``` text
+```text
 Transformer 完全不知道位置
 ```
 
 因为真实模型会加入位置设计。
 
-------------------------------------------------------------------------
+---
 
 # 71. 常见误区 5：Attention Matrix 越大越好
 
@@ -3014,7 +3157,7 @@ Transformer 完全不知道位置
 
 Full attention 提供灵活全局交互，但：
 
-``` text
+```text
 N×N
 ```
 
@@ -3023,7 +3166,7 @@ N×N
 检测器需要高分辨率多尺度特征，因此 Deformable Attention
 等方法会选择更稀疏、更高效的交互方式。
 
-------------------------------------------------------------------------
+---
 
 # 72. 常见误区 6：Transformer 不需要 CNN
 
@@ -3031,7 +3174,7 @@ N×N
 
 DEIMv2 本身就展示两条路线：
 
-``` text
+```text
 HGNetv2 CNN backbone
 
 以及
@@ -3043,19 +3186,19 @@ DINOv3 ViT + STA backbone
 
 所以现实模型不是简单的：
 
-``` text
+```text
 CNN vs Transformer
 ```
 
 二选一。
 
-------------------------------------------------------------------------
+---
 
 # 73. 本课 Shape Cheat Sheet
 
 ## ViT tokens
 
-``` text
+```text
 Image:
 [B,3,640,640]
 
@@ -3066,11 +3209,11 @@ Flatten:
 [B,1600,C]
 ```
 
-------------------------------------------------------------------------
+---
 
 ## QKV
 
-``` text
+```text
 Input:
 [B,N,C]
 
@@ -3090,13 +3233,15 @@ Q/K/V
 
 其中：
 
-\[ C=hd \]
+$$
+C=hd
+$$
 
-------------------------------------------------------------------------
+---
 
 ## Self-Attention
 
-``` text
+```text
 Q:
 [B,h,N,d]
 
@@ -3113,11 +3258,11 @@ Softmax:
 [B,h,N,d]
 ```
 
-------------------------------------------------------------------------
+---
 
 ## Merge Heads
 
-``` text
+```text
 [B,h,N,d]
 
 transpose
@@ -3129,11 +3274,11 @@ reshape
 [B,N,C]
 ```
 
-------------------------------------------------------------------------
+---
 
 ## Cross-Attention
 
-``` text
+```text
 Q:
 [B,h,Nq,d]
 
@@ -3147,116 +3292,137 @@ Output:
 [B,h,Nq,d]
 ```
 
-------------------------------------------------------------------------
+---
 
 # 74. 本课公式 Cheat Sheet
 
 QKV：
 
-\[ Q=XW_Q \]
+$$
+Q=XW_Q
+$$
 
-\[ K=XW_K \]
+$$
+K=XW_K
+$$
 
-\[ V=XW_V \]
+$$
+V=XW_V
+$$
 
 Scaled Dot-Product Attention：
 
-\[ Attention(Q,K,V) = softmax `\left`{=tex}(
-`\frac{QK^T}{\sqrt{d_k}}`{=tex} `\right`{=tex})V \]
+$$
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left( \frac{QK^T}{\sqrt{d}} \right)V
+$$
 
 Multi-Head：
 
-\[ head_i = Attention( QW_i\^Q, KW_i\^K, VW_i\^V ) \]
+$$
+head_i = Attention( QW_i^Q, KW_i^K, VW_i^V )
+$$
 
-\[ MultiHead = Concat(head_1,`\ldots`{=tex},head_h)W\^O \]
+$$
+MultiHead = Concat(head_1,\ldots,head_h)W^O
+$$
 
 FFN：
 
-\[ FFN(x) = W_2`\sigma`{=tex}(W_1x+b_1)+b_2 \]
+$$
+FFN(x) = W_2\sigma(W_1x+b_1)+b_2
+$$
 
 Residual：
 
-\[ y=x+F(x) \]
+$$
+y=x+F(x)
+$$
 
 LayerNorm：
 
-\[ `\hat{x}`{=tex} = `\frac{x-\mu}`{=tex}
-{`\sqrt{\sigma^2+\epsilon}`{=tex}} \]
+$$
+\hat{x} = \frac{x-\mu}
+{\sqrt{\sigma^2+\epsilon}}
+$$
 
-\[ y=`\gamma`{=tex}`\hat{x}`{=tex}+`\beta`{=tex} \]
+$$
+y=\gamma\hat{x}+\beta
+$$
 
-------------------------------------------------------------------------
+---
 
 # 75. 本课自测
 
 尽量不用代码。
 
-## Q1
+Q1
 
-``` text
+```text
 X = [2,1600,256]
 ```
 
 `nn.Linear(256,768)` 后是什么 shape？
 
-------------------------------------------------------------------------
+---
 
-## Q2
+Q2
 
 为什么：
 
-``` text
+```text
 768 = 3×8×32
 ```
 
 在 QKV 中有意义？
 
-------------------------------------------------------------------------
+---
 
-## Q3
+Q3
 
-``` text
+```text
 Q = [2,8,1600,32]
 K = [2,8,1600,32]
 ```
 
 `Q @ K.transpose(-2,-1)` 是什么 shape？
 
-------------------------------------------------------------------------
+---
 
-## Q4
+Q4
 
 为什么除以：
 
-\[ `\sqrt{32}`{=tex} \]
+$$
+\sqrt{32}
+$$
 
 而不是：
 
-\[ `\sqrt{256}`{=tex} \]
-
-？
+$$
+\sqrt{256}
+$$
 
 提示：每个 head 实际做点积的维度是多少？
 
-------------------------------------------------------------------------
+---
 
-## Q5
+Q5
 
 Softmax 为什么沿 key dimension？
 
-------------------------------------------------------------------------
+---
 
-## Q6
+Q6
 
 Self-Attention 与 Cross-Attention 的 Q/K/V 来源有什么区别？
 
-------------------------------------------------------------------------
+---
 
-## Q7
+Q7
 
 如果：
 
-``` text
+```text
 Q:
 [B,8,300,32]
 
@@ -3266,53 +3432,53 @@ K:
 
 attention matrix shape 是什么？
 
-------------------------------------------------------------------------
+---
 
-## Q8
+Q8
 
 为什么 Multi-Head 输出最终又能恢复成：
 
-``` text
+```text
 [B,N,256]
 ```
 
-？
+---
 
-------------------------------------------------------------------------
-
-## Q9
+Q9
 
 Attention 与 FFN 的主要职责分别是什么？
 
-------------------------------------------------------------------------
+---
 
-## Q10
+Q10
 
 Residual 为什么要求子层输出 shape 与输入兼容？
 
-------------------------------------------------------------------------
+---
 
-## Q11
+Q11
 
 为什么 full self-attention 的复杂度与：
 
-\[ N\^2 \]
+$$
+N^2
+$$
 
 相关？
 
-------------------------------------------------------------------------
+---
 
-## Q12
+Q12
 
 为什么这个问题对目标检测特别重要？
 
-------------------------------------------------------------------------
+---
 
 # 76. 课后作业 A：不用 `nn.MultiheadAttention` 手写 Attention
 
 要求：
 
-``` text
+```text
 Input:
 [B,N,256]
 
@@ -3325,7 +3491,7 @@ Output:
 
 必须自己实现：
 
-``` text
+```text
 qkv projection
 reshape
 permute
@@ -3339,17 +3505,17 @@ output projection
 
 并在每一步：
 
-``` python
+```python
 print(shape)
 ```
 
-------------------------------------------------------------------------
+---
 
 # 77. 课后作业 B：验证 Attention 权重
 
 构造：
 
-``` text
+```text
 N = 4
 d = 2
 ```
@@ -3358,7 +3524,7 @@ d = 2
 
 要求：
 
-``` text
+```text
 ① 手算 QKᵀ
 ② 除以 sqrt(2)
 ③ 手算/用计算器求 softmax
@@ -3368,13 +3534,13 @@ d = 2
 
 这是本课最值得认真完成的作业。
 
-------------------------------------------------------------------------
+---
 
 # 78. 课后作业 C：Self vs Cross
 
 实现两个函数：
 
-``` python
+```python
 self_attention(x)
 
 cross_attention(
@@ -3385,7 +3551,7 @@ cross_attention(
 
 其中：
 
-``` text
+```text
 queries:
 [B,300,256]
 
@@ -3397,20 +3563,20 @@ memory:
 
 要求写出所有 shape，并解释：
 
-``` text
+```text
 300
 8400
 ```
 
 分别是什么。
 
-------------------------------------------------------------------------
+---
 
 # 79. 课后作业 D：计算 Attention Matrix 大小
 
 分别计算：
 
-``` text
+```text
 N = 300
 N = 1600
 N = 8400
@@ -3418,13 +3584,15 @@ N = 8400
 
 时：
 
-\[ N\^2 \]
+$$
+N^2
+$$
 
 是多少。
 
 再假设：
 
-``` text
+```text
 8 heads
 batch=2
 float32=4 bytes
@@ -3436,7 +3604,7 @@ float32=4 bytes
 
 > 为什么 Deformable Attention 对检测模型很有吸引力？
 
-------------------------------------------------------------------------
+---
 
 # 80. 课后作业 E：读一段真实 ViT Attention
 
@@ -3444,7 +3612,7 @@ float32=4 bytes
 
 对下面这类链式代码：
 
-``` python
+```python
 qkv = self.qkv(x) \
     .reshape(...) \
     .permute(...)
@@ -3454,7 +3622,7 @@ q, k, v = qkv.unbind(0)
 
 逐行写：
 
-``` text
+```text
 输入 shape
 Linear 后 shape
 reshape 后 shape
@@ -3466,13 +3634,13 @@ V shape
 
 要求不运行代码也能完成。
 
-------------------------------------------------------------------------
+---
 
 # 81. 把前 4 课拼起来
 
 现在我们已经有：
 
-``` text
+```text
 第 1 课：
 完整目标检测地图
 
@@ -3488,7 +3656,7 @@ Transformer / Attention
 
 于是我们已经能理解：
 
-``` text
+```text
 Image
 [B,3,640,640]
 
@@ -3507,7 +3675,7 @@ Detection
 
 下一步就可以正式进入：
 
-``` text
+```text
 DETR
 ```
 
@@ -3515,7 +3683,7 @@ DETR
 
 > **把 Transformer 与目标检测结合起来。**
 
-------------------------------------------------------------------------
+---
 
 # 82. 下一课预告
 
@@ -3523,7 +3691,7 @@ DETR
 
 下一课会回答：
 
-``` text
+```text
 什么是 Set Prediction？
 为什么 DETR 不需要传统 anchor？
 Object Query 到底是不是一个框？
@@ -3536,7 +3704,7 @@ Cross-attention 在做什么？
 
 我们会从一个最小 DETR 开始，亲手构造：
 
-``` text
+```text
 image memory
 [B,8400,256]
 
@@ -3557,20 +3725,20 @@ query features
 
 并为第 6 课的：
 
-``` text
+```text
 Hungarian Matching
 One-to-One Assignment
 ```
 
 做好准备。
 
-------------------------------------------------------------------------
+---
 
 # 附录 A：本课与 DEIMv2 源码的对应关系
 
 本课概念会直接对应后续源码中的：
 
-``` text
+```text
 Patch Embedding
 Attention
 Transformer Block
@@ -3584,7 +3752,7 @@ multi-scale deformable attention
 
 读源码时重点寻找：
 
-``` text
+```text
 qkv
 num_heads
 head_dim
@@ -3600,39 +3768,31 @@ residual
 
 看到这些词，就回到本课的 shape 与公式。
 
-------------------------------------------------------------------------
+---
 
 # 附录 B：参考资料
 
 课程后续以官方源码和原论文为主：
 
-1.  DEIMv2 官方仓库\
-    https://github.com/Intellindust-AI-Lab/DEIMv2
-
-2.  DEIMv2 中 ViT 相关实现\
-    https://github.com/Intellindust-AI-Lab/DEIMv2/tree/main/engine/backbone
-
-3.  PyTorch Scaled Dot-Product Attention 官方文档\
-    https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
-
-4.  Transformer 原论文：Attention Is All You Need\
-    https://arxiv.org/abs/1706.03762
-
-5.  Vision Transformer 原论文\
-    https://arxiv.org/abs/2010.11929
+1. DEIMv2 官方仓库https://github.com/Intellindust-AI-Lab/DEIMv2
+2. DEIMv2 中 ViT 相关实现https://github.com/Intellindust-AI-Lab/DEIMv2/tree/main/engine/backbone
+3. PyTorch Scaled Dot-Product Attention 官方文档https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
+4. Transformer 原论文：Attention Is All You Needhttps://arxiv.org/abs/1706.03762
+5. Vision Transformer 原论文
+   https://arxiv.org/abs/2010.11929
 
 > 本课只建立标准 Attention/Transformer 基础。DEIMv2 的
 > DINOv3、RoPE、STA、Deformable Attention、DEIMTransformer
 > 等具体实现，会在对应课程中逐一对照官方源码展开，避免把"标准
 > Transformer"错误等同于"DEIMv2 中所有 Attention 实现"。
 
-------------------------------------------------------------------------
+---
 
 **第 4 课结束。**
 
 真正的达标标准是：当你看到
 
-``` text
+```text
 [B,N,C]
 → Q/K/V
 → [B,h,N,d]
@@ -3645,7 +3805,7 @@ residual
 
 时，你不仅能背出 shape，还能解释：
 
-``` text
+```text
 每一步为什么存在，
 每个维度代表什么，
 矩阵乘法为什么合法，

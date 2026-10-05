@@ -113,25 +113,25 @@ GPU3 / rank3 ─ forward ─ backward ─┘
 
 ## 2.1 Loss
 
-\[
+$$
 L(\theta)
-\]
+$$
 
 衡量当前预测有多差。
 
 ## 2.2 Gradient
 
-\[
+$$
 g_t=\nabla_\theta L(\theta_t)
-\]
+$$
 
 告诉我们参数往哪个方向变化会使 loss 下降。
 
 ## 2.3 Learning Rate
 
-\[
+$$
 \eta
-\]
+$$
 
 控制“这一步走多远”。
 
@@ -151,9 +151,9 @@ parameter update
 
 SGD 最简单：
 
-\[
+$$
 \theta_{t+1}=\theta_t-\eta g_t
-\]
+$$
 
 AdamW 则远比这复杂。
 
@@ -189,21 +189,21 @@ bbox head
 
 给定：
 
-\[
+$$
 g_t=\nabla_\theta L_t
-\]
+$$
 
 一阶矩：
 
-\[
+$$
 m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
-\]
+$$
 
 二阶矩：
 
-\[
+$$
 v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
-\]
+$$
 
 DEIMv2 X：
 
@@ -213,9 +213,9 @@ betas: [0.9, 0.999]
 
 所以：
 
-\[
+$$
 \beta_1=0.9,\qquad\beta_2=0.999
-\]
+$$
 
 一阶矩更快响应当前梯度；
 二阶矩的时间尺度更长，用于估计梯度幅值。
@@ -226,33 +226,33 @@ betas: [0.9, 0.999]
 
 初始化：
 
-\[
+$$
 m_0=0,\qquad v_0=0
-\]
+$$
 
 所以训练刚开始：
 
-\[
+$$
 m_t,v_t
-\]
+$$
 
 会天然偏向 0。
 
 Adam 使用：
 
-\[
+$$
 \hat m_t=\frac{m_t}{1-\beta_1^t}
-\]
+$$
 
-\[
+$$
 \hat v_t=\frac{v_t}{1-\beta_2^t}
-\]
+$$
 
 修正这种初始化偏差。
 
 更新近似：
 
-\[
+$$
 \theta_{t+1}
 =
 \theta_t
@@ -260,7 +260,7 @@ Adam 使用：
 \eta
 \frac{\hat m_t}
 {\sqrt{\hat v_t}+\epsilon}
-\]
+$$
 
 ---
 
@@ -268,7 +268,7 @@ Adam 使用：
 
 AdamW 的核心思想是把参数衰减从 loss gradient 中解耦：
 
-\[
+$$
 \theta_{t+1}
 =
 (1-\eta\lambda)\theta_t
@@ -276,19 +276,19 @@ AdamW 的核心思想是把参数衰减从 loss gradient 中解耦：
 \eta
 \frac{\hat m_t}
 {\sqrt{\hat v_t}+\epsilon}
-\]
+$$
 
 其中：
 
-\[
+$$
 \lambda=\text{weight decay}
-\]
+$$
 
 第一项：
 
-\[
+$$
 (1-\eta\lambda)\theta_t
-\]
+$$
 
 直接把参数向 0 收缩。
 
@@ -402,32 +402,32 @@ class + bbox
 
 因此：
 
-\[
+$$
 \eta_{\text{detector}}
 =
 5\times10^{-4}
-\]
+$$
 
-\[
+$$
 \eta_{\text{DINOv3}}
 =
 1\times10^{-5}
-\]
+$$
 
 比值：
 
-\[
+$$
 \frac{5\times10^{-4}}
 {1\times10^{-5}}
 =
 50
-\]
+$$
 
 即：
 
-\[
+$$
 \boxed{\text{detector LR = 50 × DINOv3 LR}}
-\]
+$$
 
 ---
 
@@ -443,23 +443,23 @@ update_signal = 0.01
 
 DINOv3：
 
-\[
+$$
 \Delta\theta
 \approx
 10^{-5}\times0.01
 =
 10^{-7}
-\]
+$$
 
 detector：
 
-\[
+$$
 \Delta\theta
 \approx
 5\times10^{-4}\times0.01
 =
 5\times10^{-6}
-\]
+$$
 
 后者就是前者的 50 倍。
 
@@ -626,9 +626,9 @@ detector:
 
 比值：
 
-\[
+$$
 20
-\]
+$$
 
 所以：
 
@@ -644,11 +644,11 @@ detector:
 
 简单 SGD：
 
-\[
+$$
 \theta_{t+1}
 =
 \theta_t-\eta g_t
-\]
+$$
 
 LR 太小：
 
@@ -713,14 +713,14 @@ target LR
 
 一个简化版本：
 
-\[
+$$
 \eta_t
 =
 \eta_{\max}
 \frac{t}{T_w},
 \qquad
 0\le t<T_w
-\]
+$$
 
 如果：
 
@@ -813,7 +813,7 @@ lr_gamma: ...
 
 一个标准 cosine：
 
-\[
+$$
 \eta(t)
 =
 \eta_{\min}
@@ -825,7 +825,7 @@ lr_gamma: ...
 \pi\frac{t-T_s}{T-T_s}
 \right)
 \right]
-\]
+$$
 
 其中：
 
@@ -954,31 +954,31 @@ EMA：
 
 更新：
 
-\[
+$$
 \bar\theta_t
 =
 d\bar\theta_{t-1}
 +
 (1-d)\theta_t
-\]
+$$
 
 其中：
 
-\[
+$$
 d=\text{decay}
-\]
+$$
 
 ---
 
 # 28. `decay=0.9999` 是什么意思？
 
-\[
+$$
 \bar\theta_t
 =
 0.9999\bar\theta_{t-1}
 +
 0.0001\theta_t
-\]
+$$
 
 当前 step 参数只贡献：
 
@@ -1006,9 +1006,9 @@ current model
 
 距离当前 k steps 的贡献近似：
 
-\[
+$$
 (1-d)d^k
-\]
+$$
 
 ---
 
@@ -1016,41 +1016,41 @@ current model
 
 一个常用粗略直觉：
 
-\[
+$$
 N_{\text{eff}}
 \approx
 \frac{1}{1-d}
-\]
+$$
 
 如果：
 
-\[
+$$
 d=0.9999
-\]
+$$
 
 则：
 
-\[
+$$
 N_{\text{eff}}
 \approx
 10000
-\]
+$$
 
 steps。
 
 如果：
 
-\[
+$$
 d=0.9998
-\]
+$$
 
 则：
 
-\[
+$$
 N_{\text{eff}}
 \approx
 5000
-\]
+$$
 
 steps。
 
@@ -1228,27 +1228,27 @@ LR warmup duration 减半
 
 其中给出的 EMA decay 规则：
 
-\[
+$$
 d_{\text{new}}
 =
 1-(1-d_{\text{old}})\times2
-\]
+$$
 
 若：
 
-\[
+$$
 d_{\text{old}}=0.9999
-\]
+$$
 
 则：
 
-\[
+$$
 d_{\text{new}}
 =
 1-0.0001\times2
 =
 0.9998
-\]
+$$
 
 ---
 
@@ -1290,13 +1290,13 @@ batch 64：
 
 常见经验：
 
-\[
+$$
 \eta_{\text{new}}
 =
 \eta_{\text{old}}
 \frac{B_{\text{new}}}
 {B_{\text{old}}}
-\]
+$$
 
 如果：
 
@@ -1448,9 +1448,9 @@ FP16 能表示的非常小的数有限。
 
 假设某梯度：
 
-\[
+$$
 g=10^{-8}
-\]
+$$
 
 可能在 FP16 中：
 
@@ -1462,17 +1462,17 @@ underflow → 0
 
 GradScaler 的思想：
 
-\[
+$$
 L'=sL
-\]
+$$
 
 则：
 
-\[
+$$
 \nabla L'
 =
 s\nabla L
-\]
+$$
 
 把很小的 gradient 临时放大。
 
@@ -1482,21 +1482,21 @@ s\nabla L
 
 原 gradient：
 
-\[
+$$
 10^{-8}
-\]
+$$
 
 scale：
 
-\[
+$$
 s=65536
-\]
+$$
 
 则 scaled gradient：
 
-\[
+$$
 6.5536\times10^{-4}
-\]
+$$
 
 这就更容易在 FP16 范围中保留下来。
 
@@ -1550,35 +1550,35 @@ clip_max_norm = 0.1
 
 global norm：
 
-\[
+$$
 \|g\|_2
 =
 \sqrt{
 \sum_i
 \|g_i\|_2^2
 }
-\]
+$$
 
 如果：
 
-\[
+$$
 \|g\|_2>C
-\]
+$$
 
 则按比例缩小：
 
-\[
+$$
 g_i'
 =
 g_i
 \frac{C}{\|g\|_2}
-\]
+$$
 
 这里：
 
-\[
+$$
 C=0.1
-\]
+$$
 
 ---
 
@@ -1718,10 +1718,10 @@ GPU1 gradient = g1
 
 all-reduce 后常见语义相当于平均：
 
-\[
+$$
 g=
 \frac{g_0+g_1}{2}
-\]
+$$
 
 然后两张卡：
 
@@ -1765,19 +1765,19 @@ per-GPU batch = 8
 
 则：
 
-\[
+$$
 B_{\text{global}}
 =
 4\times8
 =
 32
-\]
+$$
 
 如果 8 GPUs：
 
-\[
+$$
 8\times8=64
-\]
+$$
 
 这就是为什么：
 
@@ -3066,9 +3066,9 @@ Freeze：
 requires_grad=False
 ```
 
-\[
+$$
 \Delta\theta_{\text{DINO}}=0
-\]
+$$
 
 小 LR：
 
@@ -3077,9 +3077,9 @@ requires_grad=True
 lr=1e-5
 ```
 
-\[
+$$
 \Delta\theta_{\text{DINO}}\neq0
-\]
+$$
 
 只是更新很慢。
 
@@ -3657,11 +3657,11 @@ EMA 通常：
 
 它只通过：
 
-\[
+$$
 \bar\theta
 \leftarrow
 d\bar\theta+(1-d)\theta
-\]
+$$
 
 更新。
 

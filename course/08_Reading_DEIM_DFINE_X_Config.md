@@ -1342,7 +1342,7 @@ hidden_dim = 384
 
 那么每个 head 的维度：
 
-\[
+$$
 d_
 ==
 
@@ -1350,7 +1350,7 @@ d_
 =====
 
 48
-\]
+$$
 
 所以：
 
@@ -1522,25 +1522,25 @@ P5
 
 flatten 后 spatial positions 总数：
 
-\[
+$$
 80\times80
 +
 40\times40
 +
 20\times20
-\]
+$$
 
-\[
+$$
 ==
 
 6400+1600+400
-\]
+$$
 
-\[
+$$
 ==
 
 8400
-\]
+$$
 
 所以以后你看到：
 
@@ -1829,9 +1829,9 @@ P5
 
 所以每个 head/query 合计：
 
-\[
+$$
 3+6+3=12
-\]
+$$
 
 个采样点。
 
@@ -2457,9 +2457,9 @@ lr: 0.0005
 
 也就是：
 
-\[
+$$
 5\times10^{-4}
-\]
+$$
 
 这是默认 optimizer learning rate。
 
@@ -2479,25 +2479,21 @@ lr:
 
 也就是：
 
-\[
+$$
 5\times10^{-6}
-\]
+$$
 
 与默认：
 
-\[
+$$
 5\times10^{-4}
-\]
+$$
 
 相比：
 
-\[
-\frac}
-}
-=
-
-0.01
-\]
+$$
+\frac{5\times10^{-6}}{5\times10^{-4}} = 0.01
+$$
 
 所以：
 
@@ -2771,20 +2767,9 @@ Norm parameters
 
 AdamW 可以粗略写成：
 
-\[
-\theta_
-=======
-
-\theta_t
---------
-
-\eta
-\frac
-+\epsilon}
-----------
-
-\eta\lambda\theta_t
-\]
+$$
+\theta_{t+1} = \theta_t - \eta\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon} - \eta\lambda\theta_t
+$$
 
 其中：
 
@@ -4765,7 +4750,7 @@ solver
 
 # 94. 本课必须掌握的 15 个结论
 
-## 1
+1、
 
 `deim_hgnetv2_x_coco.yml` 不是完整配置。
 
@@ -4779,7 +4764,7 @@ __include__
 
 ---
 
-## 2
+2、
 
 最终配置是：
 
@@ -4791,7 +4776,7 @@ recursive merge
 
 ---
 
-## 3
+3、
 
 DEIM-D-FINE-X 可以理解成：
 
@@ -4803,7 +4788,7 @@ DEIM training recipe
 
 ---
 
-## 4
+4、
 
 顶层：
 
@@ -4819,7 +4804,7 @@ DEIM(...)
 
 ---
 
-## 5
+5、
 
 DEIM 的三个主要依赖：
 
@@ -4831,7 +4816,7 @@ DFINETransformer
 
 ---
 
-## 6
+6、
 
 Registry 负责：
 
@@ -4841,7 +4826,7 @@ name → Python class
 
 ---
 
-## 7
+7、
 
 `create()` 负责：
 
@@ -4851,7 +4836,7 @@ config → Python object
 
 ---
 
-## 8
+8、
 
 `__inject__` 用于：
 
@@ -4861,7 +4846,7 @@ object dependency
 
 ---
 
-## 9
+9、
 
 `__share__` 用于：
 
@@ -4871,7 +4856,7 @@ shared config value
 
 ---
 
-## 10
+10、
 
 X backbone：
 
@@ -4893,7 +4878,7 @@ HGNetv2-B5
 
 ---
 
-## 11
+11、
 
 X HybridEncoder：
 
@@ -4903,7 +4888,7 @@ hidden_dim = 384
 
 ---
 
-## 12
+12、
 
 DFINETransformer：
 
@@ -4918,7 +4903,7 @@ num_points=[3,6,3]
 
 ---
 
-## 13
+13、
 
 DEIMCriterion 使用：
 
@@ -4930,7 +4915,7 @@ MAL
 
 ---
 
-## 14
+14、
 
 Optimizer 使用：
 
@@ -4942,7 +4927,7 @@ regex parameter groups
 
 ---
 
-## 15
+15、
 
 真正运行行为不是单个 YAML 决定的，而是：
 
@@ -4962,7 +4947,7 @@ CLI overrides
 
 # 95. 本课练习
 
-## 练习 1
+练习 1
 
 不看前文，画出：
 
@@ -4974,7 +4959,7 @@ deim_hgnetv2_x_coco.yml
 
 ---
 
-## 练习 2
+练习 2
 
 解释：
 
@@ -4989,7 +4974,7 @@ DEIM:
 
 ---
 
-## 练习 3
+练习 3
 
 解释：
 
@@ -5004,7 +4989,7 @@ share
 
 ---
 
-## 练习 4
+练习 4
 
 640×640 输入：
 
@@ -5016,13 +5001,13 @@ stride = [8,16,32]
 
 ---
 
-## 练习 5
+练习 5
 
 计算：
 
-\[
+$$
 80^2+40^2+20^2
-\]
+$$
 
 并解释为什么：
 
@@ -5034,7 +5019,7 @@ stride = [8,16,32]
 
 ---
 
-## 练习 6
+练习 6
 
 X HybridEncoder：
 
@@ -5051,7 +5036,7 @@ head_dim
 
 ---
 
-## 练习 7
+练习 7
 
 解释：
 
@@ -5067,7 +5052,7 @@ num_queries = 300
 
 ---
 
-## 练习 8
+练习 8
 
 解释：
 
@@ -5079,7 +5064,7 @@ num_points: [3,6,3]
 
 ---
 
-## 练习 9
+练习 9
 
 计算：
 
@@ -5093,7 +5078,7 @@ backbone LR 是 default LR 的多少比例。
 
 ---
 
-## 练习 10
+练习 10
 
 为什么：
 
@@ -5113,7 +5098,7 @@ criterion loss weight
 
 # 96. 练习答案
 
-## 练习 4
+练习 4、
 
 ```text
 640 / 8  = 80
@@ -5123,24 +5108,24 @@ criterion loss weight
 
 ---
 
-## 练习 5
+练习 5、
 
-\[
+$$
 6400+1600+400
 =============
 
 8400
-\]
+$$
 
 表示三个 multi-scale feature map flatten 后的 spatial positions 总数。
 
 ---
 
-## 练习 6
+练习 6、
 
-\[
+$$
 384/8=48
-\]
+$$
 
 所以：
 
@@ -5150,7 +5135,7 @@ head_dim = 48
 
 ---
 
-## 练习 7
+练习 7、
 
 ```text
 num_levels
@@ -5165,7 +5150,7 @@ num_queries
 
 ---
 
-## 练习 8
+练习 8、
 
 三个尺度分别使用：
 
@@ -5179,22 +5164,22 @@ num_queries
 
 每个 head/query 合计：
 
-\[
+$$
 3+6+3=12
-\]
+$$
 
 个 multi-scale deformable sampling points。
 
 ---
 
-## 练习 9
+练习 9、
 
-\[
+$$
 5e-6 / 5e-4
 ===========
 
 0.01
-\]
+$$
 
 所以：
 

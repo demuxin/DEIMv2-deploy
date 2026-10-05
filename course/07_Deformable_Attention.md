@@ -21,7 +21,9 @@ stride 32: 20×20 = 400
 
 总位置数：
 
-\[ N_v=6400+1600+400=8400 \]
+$$
+N_v=6400+1600+400=8400
+$$
 
 Flatten + concat 后：
 
@@ -38,7 +40,9 @@ memory: [B,8400,C]
 
 普通 dense cross-attention 的 Query-position score 数约为：
 
-\[ 300`\times8400`{=tex}`\times8`{=tex} = 20,160,000 \]
+$$
+300\times8400\times8 = 20,160,000
+$$
 
 每张图、每层就是约 2016 万个 head-specific interactions。
 
@@ -67,8 +71,10 @@ Query 预测少量 Sampling Offsets
 
 普通 cross-attention：
 
-\[ `\mathrm{Attention}`{=tex}(Q,K,V) = `\mathrm{softmax}`{=tex}
-`\left`{=tex}( `\frac{QK^T}{\sqrt d}`{=tex} `\right`{=tex})V \]
+$$
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax}
+\left( \frac{QK^T}{\sqrt d} \right)V
+$$
 
 若：
 
@@ -110,7 +116,9 @@ tokens 改成少量 learned sampling locations。
 
 设：
 
-\[ r=(x,y) \]
+$$
+r=(x,y)
+$$
 
 例如：
 
@@ -176,7 +184,9 @@ Sampling Offset 由网络预测
 
 采样位置：
 
-\[ p_k=r+`\Delta `{=tex}p_k \]
+$$
+p_k=r+\Delta p_k
+$$
 
 不同：
 
@@ -205,7 +215,8 @@ P5: 20×20
 
 抽象公式：
 
-\[ `\mathrm{MSDeformAttn}`{=tex}(q) = `\sum`{=tex}\_m W_m `\left[
+$$
+\mathrm{MSDeformAttn}(q) = \sum_m W_m \left[
 \sum_l
 \sum_k
 A_{mlqk}
@@ -214,7 +225,8 @@ x_l
 \left(
 r_{ql}+\Delta p_{mlqk}
 \right)
-\right]`{=tex}\]
+\right]
+$$
 
 符号：
 
@@ -308,11 +320,15 @@ level_start_index = [0,6400,8000]
 
 二维位置 `(h,w)` 在单个 level 的 flatten index：
 
-\[ n=hW+w \]
+$$
+n=hW+w
+$$
 
 例如 P4 的全局 index：
 
-\[ 6400+h`\cdot40`{=tex}+w \]
+$$
+6400+h\cdot40+w
+$$
 
 经典 Deformable DETR 经常显式传 `level_start_index`。DEIM/D-FINE 的部分
 Python core 可以直接依据：
@@ -402,7 +418,9 @@ offset：
 
 每个 Query 有：
 
-\[ 8`\times3`{=tex}`\times4`{=tex}=96 \]
+$$
+8\times3\times4=96
+$$
 
 个 head-specific 2D offsets。
 
@@ -426,7 +444,9 @@ Level 2: 3
 
 每个 head：
 
-\[ 3+6+3=12 \]
+$$
+3+6+3=12
+$$
 
 个采样点。
 
@@ -492,7 +512,9 @@ head
 
 所有采样点权重之和：
 
-\[ 1 \]
+$$
+1
+$$
 
 普通 attention 是：
 
@@ -526,7 +548,9 @@ reference：
 
 核心关系：
 
-\[ sampling_location = reference + `\frac{offset}{(W,H)}`{=tex} \]
+$$
+sampling_location = reference + \frac{offset}{(W,H)}
+$$
 
 为什么 spatial shape 通常保存：
 
@@ -576,11 +600,15 @@ dx=4 cells
 
 normalized：
 
-\[ 4/80=0.05 \]
+$$
+4/80=0.05
+$$
 
 在 20×20 map：
 
-\[ 4/20=0.20 \]
+$$
+4/20=0.20
+$$
 
 同样移动 4 个 feature cells，在不同尺度对应不同 normalized distance。
 
@@ -622,12 +650,16 @@ w,h
 
 抽象：
 
-\[ offset' = `\Delta `{=tex}p `\times `{=tex}point_scale
-`\times`{=tex}(w,h) `\times `{=tex}offset_scale \]
+$$
+offset' = \Delta p \times point_scale
+\times(w,h) \times offset_scale
+$$
 
 然后：
 
-\[ sampling_location = (cx,cy)+offset' \]
+$$
+sampling_location = (cx,cy)+offset'
+$$
 
 因此 localization 与 feature sampling 开始互相影响。
 
@@ -709,27 +741,41 @@ x=0.25
 
 则：
 
-\[ 10(0.75)+20(0.25)=12.5 \]
+$$
+10(0.75)+20(0.25)=12.5
+$$
 
 二维时使用四个邻居。
 
 设：
 
-\[ d_x=x-x_0,`\qquad `{=tex}d_y=y-y_0 \]
+$$
+d_x=x-x_0,\qquad d_y=y-y_0
+$$
 
 四个权重：
 
-\[ w\_{00}=(1-d_x)(1-d_y) \]
+$$
+w_{00}=(1-d_x)(1-d_y)
+$$
 
-\[ w\_{10}=d_x(1-d_y) \]
+$$
+w_{10}=d_x(1-d_y)
+$$
 
-\[ w\_{01}=(1-d_x)d_y \]
+$$
+w_{01}=(1-d_x)d_y
+$$
 
-\[ w\_{11}=d_xd_y \]
+$$
+w_{11}=d_xd_y
+$$
 
 输出：
 
-\[ v= w\_{00}v\_{00} +w\_{10}v\_{10} +w\_{01}v\_{01} +w\_{11}v\_{11} \]
+$$
+v= w_{00}v_{00} +w_{10}v_{10} +w_{01}v_{01} +w_{11}v_{11}
+$$
 
 ------------------------------------------------------------------------
 
@@ -760,7 +806,9 @@ dy=0.50
 
 输出：
 
-\[ 10(0.375) +20(0.125) +30(0.375) +40(0.125) =22.5 \]
+$$
+10(0.375) +20(0.125) +30(0.375) +40(0.125) =22.5
+$$
 
 ------------------------------------------------------------------------
 
@@ -1224,11 +1272,15 @@ sin(theta)
 
 Dense interaction：
 
-\[ O(N_qN_v) \]
+$$
+O(N_qN_v)
+$$
 
 Sparse deformable sampling：
 
-\[ O `\left`{=tex}( N_q`\sum`{=tex}\_lP_l `\right`{=tex}) \]
+$$
+O \left( N_q\sum_l P_l \right)
+$$
 
 再乘 heads。
 
@@ -1243,15 +1295,21 @@ sum(P)=12
 
 Dense：
 
-\[ 300`\times8400`{=tex}`\times8`{=tex} =20,160,000 \]
+$$
+300\times8400\times8 =20,160,000
+$$
 
 Sparse sampling interactions：
 
-\[ 300`\times12`{=tex}`\times8`{=tex} =28,800 \]
+$$
+300\times12\times8 =28,800
+$$
 
 粗略 interaction-count 比：
 
-\[ 700 \]
+$$
+700
+$$
 
 但绝对不能说：
 
