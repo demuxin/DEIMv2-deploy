@@ -1,14 +1,9 @@
 # 第 4 课：Transformer 从零------Token、Q/K/V 与 Attention
 
 > **课程定位**：DEIMv2 从零到源码 · 第 4 / 24 课
-> **本课目标**：从零理解 Token、Embedding、Q/K/V、Scaled Dot-Product
-> Attention、Multi-Head
-> Attention、Residual、LayerNorm、FFN，并能够独立推导 DEIMv2 中 ViT
-> Attention 的每一步 Tensor shape。
-> **重点连接**：DINOv3/ViT Backbone、DETR/DEIM Transformer
-> Decoder、Deformable Attention 的共同基础。
-> **建议方式**：每看到一个矩阵乘法，先在纸上写 shape，再看公式；所有
-> PyTorch 实验尽量亲手运行。
+> **本课目标**：从零理解 Token、Embedding、Q/K/V、Scaled Dot-Product Attention、Multi-Head Attention、Residual、LayerNorm、FFN，并能够独立推导 DEIMv2 中 ViT Attention 的每一步 Tensor shape。
+> **重点连接**：DINOv3/ViT Backbone、DETR/DEIM Transformer Decoder、Deformable Attention 的共同基础。
+> **建议方式**：每看到一个矩阵乘法，先在纸上写 shape，再看公式；所有 PyTorch 实验尽量亲手运行。
 
 ---
 
@@ -103,9 +98,7 @@ Attention 就是用数据本身动态计算这种关系。
 
 Token 不是 Transformer 专属的"神秘对象"。
 
-它本质就是：
-
-> 一个向量形式的信息单元。
+它本质就是：一个向量形式的信息单元。
 
 在 NLP：
 
@@ -178,13 +171,7 @@ $$
 1600 image patches
 ```
 
-如果每个 patch 映射到：
-
-```text
-C = 256
-```
-
-维：
+如果每个 patch 映射到 C = 256 维：
 
 ```text
 [B,1600,256]
@@ -224,7 +211,7 @@ x = self.proj(x).flatten(2).transpose(1, 2)
 
 ```text
 1600 = token 数
-256  = 每个 token 的 feature dimension
+256 = 每个 token 的 feature dimension
 ```
 
 每个 token：
@@ -245,9 +232,7 @@ token 2:
 ...
 ```
 
-这些数字不是人工定义的"颜色/边缘标签"。
-
-它们是神经网络学习出的 feature representation。
+这些数字不是人工定义的"颜色/边缘标签"，它们是神经网络学习出的 feature representation。
 
 ---
 
@@ -296,14 +281,11 @@ Value
 最常用的直觉：
 
 ```text
-Query:
-“我正在寻找什么？”
+Query:“我正在寻找什么？”
 
-Key:
-“我这里有什么，可以被谁匹配？”
+Key:“我这里有什么，可以被谁匹配？”
 
-Value:
-“如果你关注我，我实际提供什么信息？”
+Value:“如果你关注我，我实际提供什么信息？”
 ```
 
 不要把这当作严格数学定义。
@@ -367,8 +349,7 @@ $$
 所以：
 
 ```text
-x
-[256]
+x [256]
  │
  ├── WQ → q [256]
  ├── WK → k [256]
@@ -414,26 +395,13 @@ V:
 [2,1600,256]
 ```
 
-shape 不一定必须保持 256，但经典 self-attention 中通常总 hidden
-dimension 保持一致。
+shape 不一定必须保持 256，但经典 self-attention 中通常总 hidden dimension 保持一致。
 
 ---
 
 # 9. 为什么 Q 和 K 要做点积？
 
-假设：
-
-```text
-q_i
-```
-
-是 token i 的 Query，
-
-```text
-k_j
-```
-
-是 token j 的 Key。
+假设 q_i 是 token i 的 Query，k_j 是 token j 的 Key。
 
 计算：
 
@@ -488,22 +456,6 @@ $$
 计算：
 
 $$
-QK^T
-$$
-
-先：
-
-$$
-K^T=
-\begin{bmatrix}
-1&0&1\\
-0&1&1
-\end{bmatrix}
-$$
-
-所以：
-
-$$
 QK^T =
 \begin{bmatrix}
 1&0&1\\
@@ -556,13 +508,7 @@ N 个 query tokens
 N 个 key tokens
 ```
 
-产生：
-
-```text
-N×N
-```
-
-关系矩阵。
+产生 N×N 关系矩阵。
 
 加 batch：
 
@@ -586,14 +532,6 @@ $$
 \mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left( \frac{QK^T}{\sqrt{d}} \right)V
 $$
 
-为什么不是：
-
-$$
-softmax(QK^T)V
-$$
-
-？
-
 假设 q/k 每个分量：
 
 ```text
@@ -607,13 +545,7 @@ $$
 q\cdot k = \sum_{i=1}^{d_k}q_i k_i
 $$
 
-当：
-
-```text
-d_k
-```
-
-变大时，点积的方差也会随维度增长。
+当 d_k 变大时，点积的方差也会随维度增长。
 
 结果：
 
@@ -784,13 +716,11 @@ AttentionWeights @ V
 因此：
 
 $$
-\boxed{
 [B,N,C]
 \rightarrow
 Attention
 \rightarrow
 [B,N,C]
-}
 $$
 
 ---
@@ -905,8 +835,6 @@ $$
 ---
 
 # 18. Multi-Head 不是复制 8 份完整 256 维 Attention
-
-这是常见误解。
 
 典型做法：
 
@@ -1088,8 +1016,7 @@ Q @ Kᵀ
 ```text
 2 batches
 8 heads
-每个 head
-1600 queries × 1600 keys
+每个 head 1600 queries × 1600 keys
 ```
 
 ---
@@ -1155,8 +1082,7 @@ $$
 而是：
 
 ```text
-80×80 + 40×40 + 20×20
-=
+80×80 + 40×40 + 20×20 =
 8400
 ```
 
@@ -1170,8 +1096,7 @@ $$
 
 Deformable Attention 的核心动机之一就是：
 
-> 不需要每个 query 都和所有空间位置做完整
-> attention，而是只在少量关键采样位置取信息。
+> 不需要每个 query 都和所有空间位置做完整 attention，而是只在少量关键采样位置取信息。
 
 所以第 7 课学习 Deformable Attention 时，本课的：
 
@@ -1226,12 +1151,6 @@ x = x.reshape(B, N, C)
 ```text
 [2,1600,256]
 ```
-
-因为：
-
-$$
-8\times32=256
-$$
 
 最后通常还有：
 
@@ -1312,7 +1231,6 @@ class TinyMultiHeadAttention(nn.Module):
         )
 
     def forward(self, x):
-
         B, N, C = x.shape
 
         qkv = self.qkv(x)
@@ -1325,33 +1243,19 @@ class TinyMultiHeadAttention(nn.Module):
             self.head_dim
         )
 
-        qkv = qkv.permute(
-            2, 0, 3, 1, 4
-        )
+        qkv = qkv.permute(2, 0, 3, 1, 4)
 
         q, k, v = qkv.unbind(0)
 
-        scores = (
-            q @ k.transpose(-2, -1)
-        )
+        scores = q @ k.transpose(-2, -1)
 
-        scores = (
-            scores
-            / math.sqrt(self.head_dim)
-        )
+        scores = scores / math.sqrt(self.head_dim)
 
-        attn = torch.softmax(
-            scores,
-            dim=-1
-        )
+        attn = torch.softmax(scores, dim=-1)
 
         out = attn @ v
 
-        out = out.transpose(
-            1, 2
-        ).reshape(
-            B, N, C
-        )
+        out = out.transpose(1, 2).reshape(B, N, C)
 
         out = self.proj(out)
 
@@ -1385,7 +1289,33 @@ print(y.shape)
 
 ---
 
-# 27. 为什么输入输出 Shape 一样很重要？
+# 27. Residual Connection 是什么？
+
+最简单：
+
+$$
+y=x+F(x)
+$$
+
+其中：
+
+```text
+F(x)
+```
+
+可以是 attention 或 FFN。
+
+例如：
+
+```python
+x = x + self.attn(x)
+```
+
+直觉：
+
+> 新层不是完全重写 x，而是在原信息基础上学习一个更新量。
+
+这有助于深层网络的信息和梯度传播。
 
 Transformer block 常使用 residual connection：
 
@@ -1414,69 +1344,7 @@ attention(x)
 
 才能逐元素相加。
 
-所以 Multi-Head Attention 最后要重新合并 heads，并通常投影回原 hidden
-dimension。
-
----
-
-# 28. Residual Connection 是什么？
-
-最简单：
-
-$$
-y=x+F(x)
-$$
-
-其中：
-
-```text
-F(x)
-```
-
-可以是 attention 或 FFN。
-
-例如：
-
-```python
-x = x + self.attn(x)
-```
-
-直觉：
-
-> 新层不是完全重写 x，而是在原信息基础上学习一个更新量。
-
-这有助于深层网络的信息和梯度传播。
-
----
-
-# 29. Residual 的 Shape 条件
-
-如果：
-
-```text
-x:
-[B,N,256]
-```
-
-那么：
-
-```text
-F(x)
-```
-
-也必须是：
-
-```text
-[B,N,256]
-```
-
-才能：
-
-```python
-x + F(x)
-```
-
-这就是为什么很多 Transformer 子层最终都保持 hidden dimension。
+这就是为什么很多 Transformer 子层最终都保持 hidden dimension。所以 Multi-Head Attention 最后要重新合并 heads，并通常投影回原 hidden dimension。
 
 ---
 
@@ -1538,7 +1406,7 @@ $$
 
 ---
 
-# 31. LayerNorm 与 BatchNorm 的直觉区别
+## 31. LayerNorm 与 BatchNorm 的直觉区别
 
 CNN 中常见：
 
@@ -1568,11 +1436,11 @@ LayerNorm
 [B,N,C]
 ```
 
-LayerNorm(C) 不需要依赖其他 batch 样本才能定义每个 token 的归一化。
+LayerNorm(C) 不需要依赖其他 batch 样本就能定义每个 token 的归一化。
 
 ---
 
-# 32. Pre-Norm 与 Post-Norm
+## 32. Pre-Norm 与 Post-Norm
 
 Transformer 有两种常见组织。
 
@@ -1603,7 +1471,7 @@ Pre-Norm：
 ```text
 x
 │
-├───────────────────────┐
+├─────── residual ──────┐
 ▼                       │
 LayerNorm               │
 ▼                       │
@@ -1617,8 +1485,6 @@ Attention               │
 $$
 x'=x+Attn(LN(x))
 $$
-
-不同实现可能不同。
 
 所以以后读源码不能只说：
 
@@ -1634,13 +1500,9 @@ Norm 在 Attention 前还是后？
 
 # 33. FFN 是什么？
 
-Attention 负责：
+Attention 负责：token 之间交换信息。
 
-> token 之间交换信息。
-
-FFN 负责：
-
-> 对每个 token 自己的 feature dimension 做非线性变换。
+FFN 负责：对每个 token 自己的 feature dimension 做非线性变换。
 
 典型：
 
@@ -1677,7 +1539,7 @@ shape：
 
 ---
 
-# 34. Attention 与 FFN 的分工
+## 34. Attention 与 FFN 的分工
 
 非常重要：
 
@@ -1841,13 +1703,7 @@ K
 V
 ```
 
-都来自同一个 sequence：
-
-```text
-X
-```
-
-则称：
+都来自同一个 sequence X，则称：
 
 ```text
 Self-Attention
@@ -1875,21 +1731,7 @@ ViT 中典型就是 self-attention。
 
 # 38. Cross-Attention 是什么？
 
-如果：
-
-```text
-Q
-```
-
-来自一个序列，
-
-```text
-K/V
-```
-
-来自另一个序列，
-
-就是 cross-attention。
+如果 Q 来自一个序列，K/V 来自另一个序列，就是 cross-attention。
 
 例如 DETR Decoder：
 
@@ -1911,7 +1753,7 @@ Image Key:
 “这个图像位置有什么可匹配特征？”
 
 Image Value:
-“如果关注这个位置，我提供什么视觉信息？”
+“如果关注这个位置，会提供什么视觉信息？”
 ```
 
 这是理解 DETR 的关键。
@@ -1962,9 +1804,7 @@ Attention matrix：
 [B,h,Nq,Nk]
 ```
 
-注意：
-
-> Cross-attention 不要求 query token 数和 key token 数相同。
+Cross-attention 不要求 query token 数和 key token 数相同。
 
 ---
 
@@ -2050,11 +1890,10 @@ Attention 本身如果只看 token feature，没有额外位置机制，它并�
 
 ```text
 token 17 在图片左上角
-
 token 900 在图片右下角
 ```
 
-图像任务对空间位置极其重要。
+空间位置对图像任务极其重要。
 
 所以 Transformer 需要位置相关信息，例如：
 
@@ -2070,8 +1909,7 @@ DINOv3/DEIMv2 中会遇到位置编码与 RoPE 相关实现。
 
 本课先记：
 
-> **Attention 负责内容关系，位置机制负责告诉模型 token
-> 在哪里/彼此空间关系如何。**
+> **Attention 负责内容关系，位置机制负责告诉模型 token 在哪里/彼此空间关系如何。**
 
 ---
 
@@ -2083,51 +1921,9 @@ ViT 中常见一个额外 token：
 [CLS]
 ```
 
-如果 patch tokens：
+如果 patch tokens 有 1600 个，加入 CLS 后，就有 1601 tokens，shape 为 [B,1601,C]，CLS token 不对应一个具体 patch，它通常作为全局表示载体。
 
-```text
-1600
-```
-
-加入 CLS：
-
-```text
-1601 tokens
-```
-
-shape：
-
-```text
-[B,1601,C]
-```
-
-CLS token 不对应一个具体 patch。
-
-它通常作为全局表示载体。
-
-源码里可能看到：
-
-```python
-x[:, 0]
-```
-
-代表：
-
-```text
-CLS token
-```
-
-而：
-
-```python
-x[:, 1:]
-```
-
-代表：
-
-```text
-patch tokens
-```
+源码里可能看到 x[:, 0]，代表 CLS token，而 x[:, 1:] 代表 patch tokens。
 
 第 2 课已经见过这种 indexing。
 
@@ -2144,17 +1940,9 @@ DropPath / Stochastic Depth
 
 它们主要属于正则化。
 
-Dropout：
+Dropout：随机把部分 activation 置零
 
-```text
-随机把部分 activation 置零
-```
-
-DropPath：
-
-```text
-训练时随机跳过某些 residual branch
-```
+DropPath：训练时随机跳过某些 residual branch
 
 例如：
 
@@ -2192,9 +1980,7 @@ $$
 
 所以被 mask 的位置权重为 0。
 
-在不同 Transformer 任务中 mask 用途不同。
-
-检测 Decoder 中还会遇到 denoising queries 与 attention mask 的设计。
+在不同 Transformer 任务中 mask 用途不同，检测 Decoder 中还会遇到 denoising queries 与 attention mask 的设计。
 
 ---
 
@@ -2242,20 +2028,16 @@ out = scores @ v
 
 内存开销很大。
 
-Flash Attention 类方法通过更聪明的分块和内存访问方式，避免把完整中间
-attention matrix 以朴素方式写入显存，从而：
+Flash Attention 类方法通过更聪明的分块和内存访问方式，避免把完整中间 attention matrix 以朴素方式一次性写入显存，从而：
 
 ```text
 减少显存访问
 提高速度
 ```
 
-但：
+但它没有改变 attention 的核心数学目标。
 
-> 它没有改变 attention 的核心数学目标。
-
-所以先学懂本课公式，再看 Flash Attention 才不会把"高效实现"与"Attention
-定义"混淆。
+所以先学懂本课公式，再看 Flash Attention 才不会把"高效实现"与"Attention 定义"混淆。
 
 ---
 
@@ -2397,8 +2179,7 @@ $$
 
 注意：
 
-> Attention 计算量随 token 数 N 强烈变化，但这些 Linear 的参数量主要由
-> hidden dimension C 决定。
+> Attention 计算量随 token 数 N 强烈变化，但这些 Linear 的参数量主要由 hidden dimension C 决定。
 
 ---
 
@@ -2477,6 +2258,62 @@ Output tokens
 [B,N,C]
 ```
 
+### Transformer Block 信息流公式
+
+设输入为 $X \in \mathbb{R}^{B \times N \times C}$，Transformer Block 的前向过程可写为：
+
+#### 1. 预归一化与注意力投影
+
+$$
+\hat{X} = \text{LayerNorm}(X)
+$$
+
+$$
+Q = \hat{X}W_Q, \quad K = \hat{X}W_K, \quad V = \hat{X}W_V
+$$
+
+其中 $Q, K, V \in \mathbb{R}^{B \times N \times d_k}$。
+
+#### 2. 多头自注意力
+
+$$
+\text{Attn}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+$$
+
+$$
+A = \text{MultiHead}(Q, K, V)W_O
+$$
+
+其中 $A \in \mathbb{R}^{B \times N \times C}$ 为注意力输出。
+
+#### 3. 第一个残差连接
+
+$$
+X_1 = X + A
+$$
+
+#### 4. FFN 前的预归一化
+
+$$
+\hat{X}_1 = \text{LayerNorm}(X_1)
+$$
+
+#### 5. 前馈网络
+
+$$
+\text{FFN}(\hat{X}_1) = \text{Linear}_2\left(\text{GELU}\left(\text{Linear}_1(\hat{X}_1)\right)\right)
+$$
+
+其中 $\text{Linear}_1: C \to C_{\text{hidden}}$，$\text{Linear}_2: C_{\text{hidden}} \to C$。
+
+#### 6. 第二个残差连接
+
+$$
+X_{\text{out}} = X_1 + \text{FFN}(\hat{X}_1)
+$$
+
+最终输出 $X_{\text{out}} \in \mathbb{R}^{B \times N \times C}$。
+
 一个 block 不改变 token 数和 hidden dimension，但让 feature 更强。
 
 ---
@@ -2503,13 +2340,7 @@ Block 12
 [B,N,C]
 ```
 
-shape 看起来完全不变。
-
-但 feature 内容不断变化。
-
-这提醒我们：
-
-> **Shape 不变 ≠ 网络没有做事。**
+shape 看起来完全不变，但 feature 内容不断变化。
 
 CNN 中很多 stage 会改变 shape。
 
@@ -2519,8 +2350,7 @@ Transformer block 常常主要改变 feature 内容，而保持 shape。
 
 # 54. DINOv3 为什么会取多个 Block 的中间特征？
 
-DEIMv2 的 DINOv3+STA 路线会关注多个 Transformer block
-的中间输出，例如配置中的 interaction indexes。
+DEIMv2 的 DINOv3+STA 路线会关注多个 Transformer block 的中间输出，例如配置中的 interaction indexes。
 
 直觉上：
 
@@ -2544,7 +2374,7 @@ CNN 3×3：
 
 ```text
 一个位置
-主要直接读取局部 3×3 邻域
+直接读取局部 3×3 邻域
 ```
 
 Global Self-Attention：
@@ -2579,8 +2409,7 @@ DEIMv2 的 DINOv3 + STA 就可以从这个角度理解一部分设计动机。
 Attention weights 确实表示：
 
 ```text
-在该 attention 运算中
-不同 key/value 位置参与输出的权重
+在该 attention 运算中，不同 key/value 位置参与输出的权重
 ```
 
 但不能简单断言：
@@ -2700,13 +2529,7 @@ head
 query
 ```
 
-我们需要在：
-
-```text
-所有 keys
-```
-
-之间形成归一化权重。
+我们需要在所有 keys 之间形成归一化权重。
 
 所以：
 
@@ -2922,8 +2745,7 @@ print(scores.shape)
 [2,8,300,8400]
 ```
 
-不要真的在低显存设备上随意扩大
-B/N/head，因为这个矩阵会快速占用大量内存。
+不要真的在低显存设备上随意扩大 B/N/head，因为这个矩阵会快速占用大量内存。
 
 ---
 
@@ -3075,7 +2897,9 @@ Decoder localization-related interactions
 
 ---
 
-# 67. 常见误区 1：Q/K/V 是三份不同输入
+# 67. 6 个常见误区
+
+## 1：Q/K/V 是三份不同输入
 
 不一定。
 
@@ -3105,7 +2929,7 @@ K/V
 
 ---
 
-# 68. 常见误区 2：Attention 就是找最相似的一个 Token
+## 2：Attention 就是找最相似的一个 Token
 
 不是。
 
@@ -3125,7 +2949,7 @@ Softmax 通常给所有允许位置一个权重分布：
 
 ---
 
-# 69. 常见误区 3：Multi-Head 就是把模型复制多份
+## 3：Multi-Head 就是把模型复制多份
 
 不是。
 
@@ -3133,15 +2957,13 @@ Softmax 通常给所有允许位置一个权重分布：
 
 ---
 
-# 70. 常见误区 4：Transformer 没有空间信息
+## 4：Transformer 没有空间信息
 
 更准确地说：
 
-> 纯内容 self-attention 本身不天然编码二维图像位置关系，因此视觉
-> Transformer 通常需要 position embedding、relative position、RoPE
-> 等位置机制。
+> 纯内容 self-attention 本身不天然编码二维图像位置关系，因此视觉 Transformer 通常需要 position embedding、relative position、RoPE 等位置机制。
 
-不能简单说：
+不能简单说： 
 
 ```text
 Transformer 完全不知道位置
@@ -3151,7 +2973,7 @@ Transformer 完全不知道位置
 
 ---
 
-# 71. 常见误区 5：Attention Matrix 越大越好
+## 5：Attention Matrix 越大越好
 
 不是。
 
@@ -3163,12 +2985,11 @@ N×N
 
 计算和内存很昂贵。
 
-检测器需要高分辨率多尺度特征，因此 Deformable Attention
-等方法会选择更稀疏、更高效的交互方式。
+检测器需要高分辨率多尺度特征，因此 Deformable Attention 等方法会选择更稀疏、更高效的交互方式。
 
 ---
 
-# 72. 常见误区 6：Transformer 不需要 CNN
+## 6：Transformer 不需要 CNN
 
 不同架构选择不同。
 
@@ -3604,7 +3425,38 @@ float32=4 bytes
 
 > 为什么 Deformable Attention 对检测模型很有吸引力？
 
+如果只算 *attention scores*，形状可以近似为：num_heads×batch×N×N×4 bytes
+
+**代入 8 heads、batch=2、float32=4 bytes：**
+
+| N**N**   | **元素数**               | **显存**        |
+| -------------- | ------------------------------ | --------------------- |
+| **300**  | 8×2×90,000=1,440,000         | **约5.49 MB**   |
+| **1600** | 8×2×2,560,000=40,960,000     | **约156.25 MB** |
+| **8400** | 8×2×70,560,000=1,128,960,000 | **约4.21 GB**   |
+
+这里只是粗略估算，实际显存还会受 KV cache、激活值、梯度、优化器状态、padding、多尺度特征图等因素影响。
+
+为什么 Deformable Attention 对检测模型很有吸引力？
+
+主要有三点：
+
+1、打破 N^2 复杂度
+
+普通 attention 会对所有空间位置做全连接，显存和计算随 N^2 增长。Deformable Attention 只对少量采样点计算注意力，复杂度从 O(N^2) 降到接近 O(N)，对高分辨率特征图特别友好。
+
+2、更适合目标检测的稀疏结构
+
+检测任务不需要每个像素都和全图交互，而是围绕物体、边界、关键点等局部区域做精准建模。Deformable Attention 通过可学习偏移量，让模型主动关注更有信息量的位置。
+
+3、便于多尺度特征融合
+
+检测模型通常使用 FPN 或多层特征。Deformable Attention 可以直接跨尺度采样，把高层语义和低层细节结合起来，而不必把特征图展平后做全局 attention。
+
+所以在 DETR 类检测器里，Deformable Attention 既能保留 attention 的全局建模能力，又把显存和推理成本压到可接受范围，尤其适合高分辨率输入、多尺度特征和实时检测场景。
+
 ---
+
 
 # 80. 课后作业 E：读一段真实 ViT Attention
 
@@ -3726,8 +3578,7 @@ query features
 并为第 6 课的：
 
 ```text
-Hungarian Matching
-One-to-One Assignment
+Hungarian Matching One-to-One Assignment
 ```
 
 做好准备。
@@ -3778,13 +3629,9 @@ residual
 2. DEIMv2 中 ViT 相关实现https://github.com/Intellindust-AI-Lab/DEIMv2/tree/main/engine/backbone
 3. PyTorch Scaled Dot-Product Attention 官方文档https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
 4. Transformer 原论文：Attention Is All You Needhttps://arxiv.org/abs/1706.03762
-5. Vision Transformer 原论文
-   https://arxiv.org/abs/2010.11929
+5. Vision Transformer 原论文 https://arxiv.org/abs/2010.11929
 
-> 本课只建立标准 Attention/Transformer 基础。DEIMv2 的
-> DINOv3、RoPE、STA、Deformable Attention、DEIMTransformer
-> 等具体实现，会在对应课程中逐一对照官方源码展开，避免把"标准
-> Transformer"错误等同于"DEIMv2 中所有 Attention 实现"。
+> 本课只建立标准 Attention/Transformer 基础。DEIMv2 的 DINOv3、RoPE、STA、Deformable Attention、DEIMTransformer 等具体实现，会在对应课程中逐一对照官方源码展开，避免把"标准 Transformer"错误等同于"DEIMv2 中所有 Attention 实现"。
 
 ---
 

@@ -1,11 +1,7 @@
 # 第 5 课：DETR 到底改变了什么------Object Query
 
 > **课程定位**：DEIMv2 从零到源码 · 第 5 / 24 课
-> **本课目标**：真正理解 DETR 为什么是目标检测范式上的重要变化；彻底区分
-> image feature/token、object query、anchor、proposal、prediction
-> slot；理解 set prediction、Transformer decoder、query
-> self-attention、query-image cross-attention，以及为什么最终可以得到
-> `[B,Nq,K] + [B,Nq,4]`。
+> **本课目标**：真正理解 DETR 为什么是目标检测范式上的重要变化；彻底区分 image feature/token、object query、anchor、proposal、prediction slot；理解 set prediction、Transformer decoder、query self-attention、query-image cross-attention，以及为什么最终可以得到 `[B,Nq,K] + [B,Nq,4]`。
 > **重点连接**：DETR → Deformable DETR → D-FINE → DEIM / DEIMv2。
 > **本课最重要的问题**：**300 个 Object Queries 到底是什么？**
 
@@ -35,13 +31,7 @@ Transformer / QKV / Attention
 DETR
 ```
 
-因为 DETR 的核心，就是把：
-
-```text
-目标检测
-```
-
-重新写成：
+因为 DETR 的核心，就是把目标检测重新写成：
 
 ```text
 Transformer + Set Prediction
@@ -79,31 +69,13 @@ $$
 Image \rightarrow \{(c_i,b_i)\}_{i=1}^{M}
 $$
 
-其中：
+其中目标数：
 
 ```text
 M
 ```
 
 不是固定的。
-
-有的图片：
-
-```text
-0 个目标
-```
-
-有的：
-
-```text
-3 个
-```
-
-有的：
-
-```text
-几十个
-```
 
 所以目标检测的输出天然是一个：
 
@@ -180,8 +152,7 @@ Feature Map
 每个位置
 放多个 anchors
 
-每个 anchor
-预测：
+每个 anchor 预测：
 class
 box offset
 ```
@@ -198,7 +169,7 @@ $$
 80\times80\times3 = 19,200
 $$
 
-个候选。
+个候选框。
 
 然后还需要从大量重叠候选中筛掉重复框。
 
@@ -284,7 +255,7 @@ DETR 希望把很多人工设计的检测组件简化掉。
 核心思想可以概括为：
 
 ```text
-不要先生成成千上万个 dense candidates
+不要先生成成千上万个 dense candidates，
 再靠规则去重。
 
 而是：
@@ -307,8 +278,7 @@ Object Queries
 
 最安全的初始理解：
 
-> **Object Query 是 Transformer Decoder 中用于产生目标预测的一组查询表示
-> / prediction slots。**
+> **Object Query 是 Transformer Decoder 中用于产生目标预测的一组查询表示 / prediction slots。**
 
 例如：
 
@@ -339,9 +309,7 @@ query embeddings:
 每个 slot 最终可以预测：
 
 ```text
-一个类别
-+
-一个 bounding box
+一个类别 + 一个 bounding box
 ```
 
 或者：
@@ -409,9 +377,7 @@ learnable embeddings / decoder queries
 
 但是必须注意：
 
-> 后来的 DETR 变体（如 Deformable DETR、DINO、D-FINE 等）会引入
-> reference points、two-stage proposal/query selection、anchor-like
-> parameterization 等机制。
+> 后来的 DETR 变体（如 Deformable DETR、DINO、D-FINE 等）会引入 reference points、two-stage proposal/query selection、anchor-like parameterization 等机制。
 
 因此不能把：
 
@@ -623,7 +589,6 @@ Image Memory
       │
       │ K / V
       │
-      │
       ▼
 Cross-Attention
       ▲
@@ -632,12 +597,11 @@ Cross-Attention
       │
 Object Queries
 [B,300,256]
-
       │
       ▼
 Decoder Output
 [B,300,256]
-
+      │
       ├──────────────┐
       ▼              ▼
 Class Head        Box Head
@@ -732,8 +696,7 @@ queries:
 Self-Attention：
 
 ```text
-Q/K/V
-都来自 queries
+Q/K/V 都来自 queries
 ```
 
 attention matrix：
@@ -838,8 +801,7 @@ classification head + box head
 类别与位置
 ```
 
-在原始 DETR 中，box 是 decoder feature 经过 prediction head
-后预测出来的。
+在原始 DETR 中，box 是 decoder feature 经过 prediction head 后预测出来的。
 
 后来的 DETR 变体会让 query 与 reference point / proposal 更紧密地结合。
 
@@ -860,8 +822,7 @@ Query Self-Attention
 [B,Nq,C]
     │
     ▼
-Cross-Attention
-with Image Memory
+Cross-Attention with Image Memory
     │
     ▼
 [B,Nq,C]
@@ -918,19 +879,7 @@ decoder layer 一般保持 query sequence length：
 
 每一个 query feature 都对应一个预测槽位。
 
-然后：
-
-```text
-class head
-```
-
-和：
-
-```text
-box head
-```
-
-分别把它转换为目标类别与 box 参数。
+然后 class head 和 box head 分别把它转换为目标类别与 box 参数。
 
 ---
 
@@ -961,12 +910,10 @@ class_head = nn.Linear(
 如果 K 表示模型定义的类别输出维度，那么：
 
 ```text
-每个 query
-→ 一组类别 logits
+每个 query → 一组类别 logits
 ```
 
-具体是否显式包含 no-object 类、使用 sigmoid 还是 softmax，取决于 DETR
-变体与 criterion 实现。
+具体是否显式包含 no-object 类、使用 sigmoid 还是 softmax，取决于 DETR 变体与 criterion 实现。
 
 后面进入 DEIM/D-FINE criterion 时会按真实源码讲。
 
@@ -1001,10 +948,7 @@ box_head = nn.Sequential(
 四个数可以表示：
 
 ```text
-cx
-cy
-w
-h
+cx cy w h
 ```
 
 通常是归一化坐标。
@@ -1012,8 +956,6 @@ h
 ---
 
 # 25. 但 D-FINE 的 Box Regression 更复杂
-
-这里必须提前提醒。
 
 为了理解 DETR，我们现在用：
 
@@ -1114,9 +1056,7 @@ classification confidence
 300
 ```
 
-是 prediction slots 数，
-
-不是最终 detection count。
+是 prediction slots 数，不是最终 detection count。
 
 后处理具体规则依模型实现。
 
@@ -1234,15 +1174,13 @@ GIoU cost
 训练 matching 中：
 
 ```text
-一个 GT
-最多匹配一个 prediction
+一个 GT 最多匹配一个 prediction
 ```
 
 同时：
 
 ```text
-一个 prediction
-最多匹配一个 GT
+一个 prediction 最多匹配一个 GT
 ```
 
 所以是：
@@ -1254,8 +1192,7 @@ one-to-one
 而不是：
 
 ```text
-一个 GT
-对应几十个 positive anchors
+一个 GT 对应几十个 positive anchors
 ```
 
 这正是 DETR set prediction 的核心特征之一。
@@ -1283,8 +1220,7 @@ one-to-one
 
 但注意：
 
-> "不使用 NMS"来自整体 set prediction + matching + loss
-> 设计，不应该粗暴归因于某一层 self-attention。
+> "不使用 NMS"来自整体 set prediction + matching + loss 设计，不应该粗暴归因于某一层 self-attention。
 
 ---
 
@@ -1348,7 +1284,6 @@ Transformer Encoder
 Image Memory
 [B,N,C]
     │
-    │
     │ K,V
     ▼
 Transformer Decoder
@@ -1400,8 +1335,7 @@ DEIMv2 就位于这条长期演化路线的后面。
 
 最核心的一个方向：
 
-> 不再让每个 query 对所有 image positions 做昂贵的 full
-> cross-attention。
+> 不再让每个 query 对所有 image positions 做昂贵的 full cross-attention。
 
 而是围绕：
 
@@ -1557,11 +1491,9 @@ Image Features
 最后：
 
 ```text
-一些侦探
-找到真实目标
+一些侦探找到真实目标
 
-大量侦探
-没有找到有效目标
+大量侦探没有找到有效目标
 ```
 
 但这个类比有边界：
@@ -1687,8 +1619,7 @@ $$
 也就是说：
 
 ```text
-绝大多数 prediction slots
-不是 matched positive
+绝大多数 prediction slots 不是 matched positive
 ```
 
 这就是 DEIM 关注的关键训练效率问题之一：
@@ -1703,8 +1634,7 @@ $$
 
 DEIM 会问：
 
-> 能不能保持 one-to-one set prediction
-> 的优点，同时让训练时获得更多有效正监督？
+> 能不能保持 one-to-one set prediction 的优点，同时让训练时获得更多有效正监督？
 
 这就是：
 
@@ -1844,17 +1774,11 @@ import torch
 B = 2
 C = 256
 
-p3 = torch.randn(
-    B, C, 80, 80
-)
+p3 = torch.randn(B, C, 80, 80)
 
-p4 = torch.randn(
-    B, C, 40, 40
-)
+p4 = torch.randn(B, C, 40, 40)
 
-p5 = torch.randn(
-    B, C, 20, 20
-)
+p5 = torch.randn(B, C, 20, 20)
 
 features = []
 
@@ -1904,13 +1828,9 @@ Nq = 300
 Nm = 840
 C = 256
 
-queries = torch.randn(
-    B, Nq, C
-)
+queries = torch.randn(B, Nq, C)
 
-memory = torch.randn(
-    B, Nm, C
-)
+memory = torch.randn(B, Nm, C)
 
 cross_attn = nn.MultiheadAttention(
     embed_dim=C,
@@ -1968,14 +1888,12 @@ output:
 
 注意：
 
-> Cross-Attention 输出 sequence length 跟 Query 一样，是 300，而不是
-> 840。
+> Cross-Attention 输出 sequence length 跟 Query 一样，是 300，而不是 840。
 
 因为：
 
 ```text
-每个 query
-从 memory 读取信息
+每个 query 从 memory 读取信息
 ```
 
 最终仍然得到一个更新后的 query feature。
@@ -2015,13 +1933,7 @@ $$
 [N_q,N_k] \times [N_k,d_v] = [N_q,d_v]
 $$
 
-所以输出数量由：
-
-```text
-Query 数 Nq
-```
-
-决定。
+所以输出数量由 Query 数 Nq 决定。
 
 这是理解 decoder 的关键。
 
@@ -2038,9 +1950,7 @@ Nq = 300
 C = 256
 K = 80
 
-decoder_output = torch.randn(
-    B, Nq, C
-)
+decoder_output = torch.randn(B, Nq, C)
 
 class_head = nn.Linear(
     C,
@@ -2467,8 +2377,7 @@ Matching：
 这里的"end-to-end"重点是：
 
 ```text
-从图像
-直接学习 set prediction
+从图像直接学习 set prediction
 ```
 
 并通过 matching/loss 训练最终目标集合。
@@ -2548,9 +2457,7 @@ D-FINE：
 Object Query
 ```
 
-仍然是预测主体，
-
-但：
+仍然是预测主体，但：
 
 ```text
 “如何从 query 表示得到更准确的 box”
@@ -2995,8 +2902,7 @@ Q11
 
 Q12
 
-如果一张图有 7 个 GT、300 queries，普通 O2O 最多有多少 matched positive
-predictions？
+如果一张图有 7 个 GT、300 queries，普通 O2O 最多有多少 matched positive predictions？
 
 ---
 
@@ -3008,18 +2914,13 @@ Q13
 
 Q14
 
-原始 DETR 与后续 Deformable/DINO/D-FINE 的 query
-在空间参考上有什么演化？
+原始 DETR 与后续 Deformable/DINO/D-FINE 的 query 在空间参考上有什么演化？
 
 ---
 
 Q15
 
-为什么不能说：
-
-```text
-DETR 的核心只是“把 CNN 换成 Transformer”
-```
+为什么不能说：DETR 的核心只是“把 CNN 换成 Transformer”
 
 ---
 
@@ -3105,8 +3006,7 @@ box:
 
 注意：
 
-> 比较"原始 DETR learned query"与"经典 anchor-based
-> detector"，不要把所有后续 DETR 变体混成一个模型。
+> 比较"原始 DETR learned query"与"经典 anchor-based detector"，不要把所有后续 DETR 变体混成一个模型。
 
 ---
 
@@ -3193,8 +3093,7 @@ bipartite matching
 
 Object Query
 =
-decoder query representation /
-prediction slot
+decoder query representation / prediction slot
 
 Image Memory
 =
@@ -3396,13 +3295,9 @@ nn.Embedding(300,256)
 2. DETR 官方实现https://github.com/facebookresearch/detr
 3. Deformable DETR 原论文https://arxiv.org/abs/2010.04159
 4. DEIMv2 官方仓库https://github.com/Intellindust-AI-Lab/DEIMv2
-5. DEIM 官方仓库
-   https://github.com/Intellindust-AI-Lab/DEIM
+5. DEIM 官方仓库https://github.com/Intellindust-AI-Lab/DEIM
 
-> 本课的重点是建立 DETR Object Query / Set Prediction 的基础模型。DEIMv2
-> 中 query selection、reference points、denoising、D-FINE localization
-> 等具体实现，以后会单独对照官方源码，不把原始 DETR 的简化结构误认为
-> DEIMv2 的最终实现。
+> 本课的重点是建立 DETR Object Query / Set Prediction 的基础模型。DEIMv2 中 query selection、reference points、denoising、D-FINE localization 等具体实现，以后会单独对照官方源码，不把原始 DETR 的简化结构误认为 DEIMv2 的最终实现。
 
 ---
 
