@@ -13,7 +13,8 @@
     xyxy(训练为直接拉伸、无 letterbox padding,故无需还原 padding)。
 
 特性:自动从 ckpt 推断类别数与 query 数、自动跳过 decoder.anchors/valid_mask(按导出尺寸重新生成)、
-ema 权重优先、--check/--simplify/--input 自检、预处理从配置自动推导(dfine 只 /255、dinov3 加 ImageNet 归一化)。
+ema 权重优先、--check/--simplify/--input 自检、预处理从配置自动推导(dfine 只 /255、dinov3 加 ImageNet 归一化)、
+batch 维可控(--static-batch 导出静态 1,默认动态 -1)。
 
 验证结果图在容器 /tmp/dinov3_x_test_result.jpg、/tmp/dfine_x_test_result.jpg,可以查看画框效果确认后处理正确。
 部署侧注意:输入按"直接拉伸到 [576,1024]+/255(+dinov3 归一化)",输出 pred_boxes 是相对输入图的 cxcywh 归一化值,
@@ -26,15 +27,23 @@ ema 权重优先、--check/--simplify/--input 自检、预处理从配置自动�
       -r outputs/deim_hgnetv2_x_charging_gun_nc4/best_stg2.pth --check --simplify
 
   # DEIMv2-DINOv3(需要把 backbone 权重路径指向训练时提取的 backbone 权重文件)
+  # 大输入尺寸, batch 维静态 1
   python3 tools/deployment/export_onnx_v2.py \
       -c configs/deimv2/deimv2_dinov3_x_coco.yml \
-      -r outputs/deimv2_dinov3_x_charging_gun_nc4/best_stg2.pth \
-      --backbone ckpts/dinov3_vits16plus_from_deimv2_x.pth --check --simplify
+      -r outputs/deimv2_dinov3_x_personcaraninal_7/best_stg2.pth \
+      --backbone ckpts/dinov3_vits16plus_from_deimv2_x.pth --check --simplify \
+      --output outputs/deimv2_dinov3_x_personcaraninal_7/best_stg2_x_1088_fp16.onnx --fp16 --static-batch
+
+  python3 tools/deployment/export_onnx_v2.py \
+      -c configs/deimv2/deimv2_dinov3_l_coco.yml \
+      -r outputs/deimv2_dinov3_l_personcaraninal/best_stg2.pth \
+      --backbone ckpts/dinov3_vits16plus_from_deimv2_l.pth --check --simplify \
+      --output outputs/deimv2_dinov3_l_personcaraninal/best_stg2_l_512_fp16.onnx --fp16
 
   # 导出 + ONNX Runtime 端到端自检(画框存 jpg)
   python3 tools/deployment/export_onnx_v2.py \
       -c configs/deimv2/deimv2_dinov3_x_coco.yml \
-      -r outputs/deimv2_dinov3_x_charging_gun_nc4/best_stg2.pth \
+      -r outputs/deimv2_dinov3_x_personcaraninal/best_stg2.pth \
       --backbone ckpts/dinov3_vits16plus_from_deimv2_x.pth \
       --input charging_gun.jpg --check --simplify
 """
@@ -86,6 +95,21 @@ def infer_num_classes(state):
 # ---------------------------------------------------------------------------
 # 预处理/后处理(喂图方式与训练 val 完全一致,由配置自动推导)
 # ---------------------------------------------------------------------------
+class MixedFp16IO(nn.Module):
+    """外壳:对外保持 FP32 输入输出,内部走 FP16。
+
+    这样 ONNX 的 I/O dtype 不变,部署侧的预处理/后处理代码不用改;
+    再配合 TensorRT 的 strongly-typed 构建,TRT 就会尊重图里每一层的 dtype。
+    """
+
+    def __init__(self, inner):
+        super().__init__()
+        self.inner = inner
+
+    def forward(self, images):
+        return self.inner(images.half()).float()
+
+
 def build_preprocess(cfg):
     val_ops = cfg.yaml_cfg["val_dataloader"]["dataset"]["transforms"]["ops"]
     size = list(cfg.yaml_cfg["eval_spatial_size"])          # [h, w]
@@ -185,18 +209,38 @@ def main(args):
 
     model = Model().eval()
     size = list(cfg.yaml_cfg["eval_spatial_size"])          # [h, w]
-    data = torch.rand(args.batch_size, 3, size[0], size[1])
+    # 动态 batch 默认取 2 便于区分 batch 维(--input 自检仍只喂第 0 张); 静态 batch 默认取 1
+    batch_size = 1 if args.static_batch else 2
+    data = torch.rand(batch_size, 3, size[0], size[1])
+    if args.fp16:
+        # 混合精度:权重/激活走 FP16,I/O 保持 FP32。
+        # 必须用 TensorRT --strongly-typed 构建,否则弱类型 + kFP16 会把
+        # 图里的 dtype 分界整个忽略掉,精度照样崩。
+        if not torch.cuda.is_available():
+            raise RuntimeError("--fp16 导出需要 GPU:CPU 上没有 grid_sample 等算子的 FP16 实现")
+        # 模型侧已经做了混合精度需要的两件事,这里只负责整体 .half():
+        #   - HybridEncoder 的 pos_embed 注册成 buffer,会跟着 .half() 走
+        #   - deformable attention 的采样网格对齐到 value 的 dtype
+        model = MixedFp16IO(model.half()).eval().cuda()   # FP16 追踪必须走 GPU
+        data = data.cuda()
+        print("混合精度导出:主体 FP16,I/O 保持 FP32(engine 需用 --strongly-typed 构建)")
     with torch.no_grad():
         out = model(data)
     n_queries = out.shape[1]
-    print(f"导出输入: ({args.batch_size}, 3, {size[0]}, {size[1]}) | "
+    batch_desc = f"静态 {batch_size}" if args.static_batch else "动态 -1"
+    print(f"导出输入: ({batch_size}, 3, {size[0]}, {size[1]}) | "
+          f"batch 维: {batch_desc} | "
           f"输出: (B, {n_queries}, {4 + num_classes}) | num_classes = {num_classes}")
 
     output_file = args.output or args.resume.replace(".pth", ".onnx")
+    # 静态 batch 时不给 dynamic_axes,batch 维即按上面的 batch_size 固化在图里;
+    # H/W 一直是静态(eval_spatial_size),所以固定 batch 后整张图不含动态维。
+    dynamic_axes = None if args.static_batch \
+        else {"images": {0: "Batch"}, "output": {0: "Batch"}}
     torch.onnx.export(
         model, (data,), output_file,
         input_names=["images"], output_names=["output"],
-        dynamic_axes={"images": {0: "Batch"}, "output": {0: "Batch"}},
+        dynamic_axes=dynamic_axes,
         opset_version=args.opset, do_constant_folding=True,
     )
     print("导出完成:", output_file)
@@ -245,7 +289,13 @@ if __name__ == "__main__":
     parser.add_argument("--backbone", type=str, default=None,
                         help="DINOv3STAs.weights_path(仅 deimv2_dinov3 需要,训练脚本提取的那个文件)")
     parser.add_argument("--opset", type=int, default=17)
-    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--fp16", action="store_true",
+                        help="导出混合精度图(主体 FP16,I/O 保持 FP32),"
+                             "需配合 TensorRT 的 --strongly-typed 构建")
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="导出/自检用的 batch size;默认动态 batch 时取 2、静态 batch 时取 1")
+    parser.add_argument("--static-batch", action="store_true",
+                        help="把 batch 维导出成静态(--batch-size,默认 1); 不加此参数则导出为动态 -1")
     parser.add_argument("--output", type=str, default=None, help="输出 onnx(默认与 resume 同路径)")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--simplify", action="store_true")
